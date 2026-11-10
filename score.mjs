@@ -20,10 +20,10 @@ export const contracts = [
       win: points, loss: points, bonus: 3, penalty: 3, maximum: 8,
     };
   }),
-  {id:"small", mode:"misery", label:"Petite misère", target:0, players:1, multiple:true, win:18, loss:21},
-  {id:"solo8small", mode:"misery", label:"Solo 8 sur petite misère", target:8, players:1, win:18, loss:21},
-  {id:"large", mode:"misery", label:"Grande misère", target:0, players:1, multiple:true, win:36, loss:42},
-  {id:"largetrou", mode:"misery", label:"Grande misère sur trou", target:0, players:1, multiple:true, win:42, loss:48},
+  {id:"small", mode:"misery", label:"Petite misère", target:0, players:1, multiple:true, outcomeOnly:true, win:18, loss:21},
+  {id:"solo8small", mode:"misery", label:"Solo 8 sur petite misère", target:8, players:1, outcomeOnly:true, win:18, loss:21},
+  {id:"large", mode:"misery", label:"Grande misère", target:0, players:1, multiple:true, outcomeOnly:true, win:36, loss:42},
+  {id:"largetrou", mode:"misery", label:"Grande misère sur trou", target:0, players:1, multiple:true, outcomeOnly:true, win:42, loss:48},
   {id:"piccolo", mode:"misery", label:"Piccolo", target:1, players:1, exact:true, win:24, loss:24},
   {id:"trou", mode:"other", label:"Trou", target:9, players:2, win:10, loss:10, bonus:3, penalty:3, capot:30},
   {id:"ab9", mode:"other", label:"Abondance", target:9, players:1, win:30, loss:36},
@@ -35,6 +35,11 @@ export const contracts = [
 
 export const byId = Object.fromEntries(contracts.map(contract => [contract.id, contract]));
 export const seats = [0, 1, 2, 3];
+
+export function declarationWon(contract, entry, tricks) {
+  if (contract.outcomeOnly && typeof entry.won === "boolean") return entry.won;
+  return contract.target === 0 || contract.exact ? tricks === contract.target : tricks >= contract.target;
+}
 
 export function rolesFor({players, dealer: openingDealer}, roundIndex = 0) {
   const count = players.length;
@@ -85,8 +90,10 @@ export function calculate(contract, entries, tricks, doubled, overrides = {}, ve
   }
   if (target === 0 && entries.length === 2) {
     const [first, second] = entries;
-    const bothWon = first.tricks === 0 && second.tricks === 0;
-    const bothLost = first.tricks > 0 && second.tricks > 0;
+    const firstWon = declarationWon(contract, first, first.tricks);
+    const secondWon = declarationWon(contract, second, second.tricks);
+    const bothWon = firstWon && secondWon;
+    const bothLost = !firstWon && !secondWon;
     const winPer = Math.floor(win / 2);
     const lossPer = Math.floor(loss / 2);
     if (bothWon || bothLost) {
@@ -94,7 +101,7 @@ export function calculate(contract, entries, tricks, doubled, overrides = {}, ve
       if (!points) return scores;
       return scores.map((_, index) => entries.some(entry => entry.seat === index) ? points : -points);
     }
-    const winner = first.tricks === 0 ? first : second;
+    const winner = firstWon ? first : second;
     const loser = winner === first ? second : first;
     const wonPoints = win - Math.floor(win / 6);
     const lostPoints = version === 1 ? wonPoints + 2 * Math.floor(loss / 6) : loss;
@@ -106,9 +113,10 @@ export function calculate(contract, entries, tricks, doubled, overrides = {}, ve
     scores[defenders[1]] = Math.ceil(difference / 2) * factor;
     return scores.map(value => value || 0);
   }
-  const won = target === 0 || contract.exact ? tricks === target : tricks >= target;
-  const points = won ? win + Math.max(0, Math.min(maximum, tricks) - target) * bonus
-    : -(loss + Math.max(0, target - tricks) * penalty);
+  const won = declarationWon({...contract,target}, entries[0], tricks);
+  const scoredTricks = contract.outcomeOnly ? target : tricks;
+  const points = won ? win + Math.max(0, Math.min(maximum, scoredTricks) - target) * bonus
+    : -(loss + Math.max(0, target - scoredTricks) * penalty);
   const declarer = entries[0].seat;
   scores[declarer] = points * factor;
   const split = Math.floor(Math.abs(points) / 3);

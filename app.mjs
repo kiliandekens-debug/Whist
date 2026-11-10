@@ -1,5 +1,5 @@
 import {createCloudStore} from "./cloud.mjs";
-import {modes, contracts, byId, rolesFor, calculateRound} from "./score.mjs";
+import {modes, contracts, byId, rolesFor, calculateRound, declarationWon} from "./score.mjs";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
@@ -203,9 +203,13 @@ function roundTable(game, finished) {
     const {dead} = rolesFor(game, index);
     const played = round.entries.map(entry => {
       const name = escape(game.players[entry.seat]);
+      if (byId[round.contract].outcomeOnly) {
+        const won = declarationWon(byId[round.contract], entry, round.entries.length === 2 ? entry.tricks : round.tricks);
+        return name + " · " + (won ? "Gagné" : "Perdu");
+      }
       return round.tricks === null ? name + " (" + entry.tricks + ")" : name;
     }).join(" / ");
-    const result = round.tricks === null ? played : played + " · " + round.tricks + " pli" + plural(round.tricks);
+    const result = byId[round.contract].outcomeOnly || round.tricks === null ? played : played + " · " + round.tricks + " pli" + plural(round.tricks);
     const info = `${escape(byId[round.contract].label)}${round.doubled ? " ×2" : ""}<small>Tour ${index + 1} · ${result}</small>`;
     return `<tr><td>${finished ? info : `<button data-action="edit-score" data-value="${index}" title="Modifier le tour ${index + 1}">${info}</button>`}</td>${round.values.map((value, seat) => `<td class="${seat === dead ? "dead-cell" : color(value)}">${signed(value)}${seat === dead ? "<small>Mort</small>" : ""}</td>`).join("")}</tr>`;
   }).join("")}</tbody></table></div>`;
@@ -290,6 +294,11 @@ function openScore(index = null) {
   const round = index === null ? null : data.active.rounds[index];
   score = round ? {index, mode:byId[round.contract].mode, contract:round.contract, entries:round.entries.map(entry => ({...entry})), tricks:round.tricks, doubled:round.doubled, rules:{...round.rules}}
     : {index, mode:"duo", contract:null, entries:[], tricks:null, doubled:false, rules:null};
+  if (round && byId[round.contract].outcomeOnly) {
+    score.entries = round.entries.map(entry => ({seat:entry.seat,
+      won:declarationWon(byId[round.contract], entry, round.entries.length === 2 ? entry.tricks : round.tricks)}));
+    score.tricks = null;
+  }
   renderScore();
 }
 function scoreValues() {
@@ -297,7 +306,9 @@ function scoreValues() {
   const contract = byId[score.contract];
   if (!contract || score.entries.length < contract.players) return null;
   const individual = contract.target === 0 && score.entries.length === 2;
-  if (individual) {
+  if (contract.outcomeOnly) {
+    if (score.entries.some(entry => typeof entry.won !== "boolean")) return null;
+  } else if (individual) {
     if (score.entries.some(entry => entry.tricks === null)) return null;
     const count = score.entries.reduce((sum, entry) => sum + entry.tricks, 0);
     if (count > (contract.id === "small" ? 12 : 13)) return null;
@@ -306,6 +317,9 @@ function scoreValues() {
 }
 function trickPicker(selected, max, target, seat = "all") {
   return `<div class="tricks">${Array.from({length:max + 1}, (_, n) => `<button aria-label="${n} pli${plural(n)}${seat === "all" ? "" : " pour " + escape(data.active.players[seat])}" aria-pressed="${n === selected}" class="${n === target ? "target" : ""}" data-action="tricks" data-value="${n}" data-seat="${seat}">${n}</button>`).join("")}</div>`;
+}
+function outcomePicker(entry) {
+  return `<div class="trick-row"><p class="hint">${escape(data.active.players[entry.seat])}</p><div class="toggle outcome-picker" role="group" aria-label="Résultat de ${escape(data.active.players[entry.seat])}">${[true,false].map(won => `<button aria-pressed="${entry.won === won}" data-action="outcome" data-value="${Number(won)}" data-seat="${entry.seat}">${won ? "Gagné" : "Perdu"}</button>`).join("")}</div></div>`;
 }
 function renderScore() {
   const game = data.active;
@@ -328,10 +342,11 @@ function renderScore() {
       <fieldset><legend><span aria-hidden="true">02</span> Joueurs actifs</legend><p class="hint player-hint">${playerHint}</p><div class="pick-players">
       ${game.players.map((name, seat) => seat === dead ? "" : `<button ${contract ? "" : "disabled"} aria-label="${escape(name)}" aria-pressed="${score.entries.some(entry => entry.seat === seat)}" data-action="player" data-value="${seat}">${avatar(seat)}<span class="pick-name">${escape(name)}</span></button>`).join("")}</div></fieldset>
       </div>
-      ${contract ? `<fieldset><legend><span aria-hidden="true">03</span> Plis gagnés</legend>${individual
+      ${contract ? `<fieldset><legend><span aria-hidden="true">03</span> ${contract.outcomeOnly ? "Résultat du contrat" : "Plis gagnés"}</legend>${contract.outcomeOnly
+        ? (score.entries.length ? score.entries.map(outcomePicker).join("") : '<p class="hint">Sélectionne le ou les déclarants pour encoder leur résultat.</p>') : individual
         ? score.entries.map(entry => `<div class="trick-row"><p class="hint">${escape(game.players[entry.seat])}</p>${trickPicker(entry.tricks,max,0,entry.seat)}</div>`).join("")
         : trickPicker(score.tricks,max,contract.target)}
-        ${individual && entriesTotal > max ? `<p class="error" role="alert">Le total des deux joueurs dépasse ${max} plis.</p>` : ""}
+        ${!contract.outcomeOnly && individual && entriesTotal > max ? `<p class="error" role="alert">Le total des deux joueurs dépasse ${max} plis.</p>` : ""}
       </fieldset>` : ""}
       <div class="double-row"><span id="double-label">Donne doublée</span><div class="toggle" role="group" aria-labelledby="double-label">${[false,true].map(option => `<button aria-pressed="${score.doubled === option}" data-action="double" data-value="${Number(option)}">${option ? "Oui ×2" : "Non"}</button>`).join("")}</div></div>
     </div>
@@ -440,6 +455,10 @@ const actions = {
     renderScore();
   },
   player(value) { changePlayer(Number(value)); renderScore(); },
+  outcome(value, seat) {
+    score.entries.find(entry => entry.seat === Number(seat)).won = value === "1";
+    renderScore();
+  },
   tricks(value, seat) {
     if (seat === "all") score.tricks = Number(value);
     else score.entries.find(entry => entry.seat === Number(seat)).tricks = Number(value);
