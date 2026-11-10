@@ -466,5 +466,6 @@ body:has(dialog[open]) {overflow:hidden}
 }
 
 .cloud-controls {display:none}
+nav[hidden] {display:none}
 [data-storage="supabase"] .cloud-controls {display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:6px;font-size:12px;color:var(--muted)}
 .cloud-controls button[hidden] {display:none}
