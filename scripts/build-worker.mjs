@@ -1,6 +1,6 @@
 import {mkdir, readFile, writeFile} from "node:fs/promises";
 
-const assetFiles = ["index.html", "app.mjs", "score.mjs", "cloud.mjs", "style.css", "icon.svg", "cards.svg"];
+const assetFiles = ["index.html", "app.mjs", "score.mjs", "players.mjs", "cloud.mjs", "style.css", "icon.svg", "cards.svg"];
 const source = new URL("../" + (process.argv[2] ?? "dist/"), import.meta.url);
 const entries = await Promise.all(assetFiles.map(async path => {
   let content = await readFile(new URL(path, source), "utf8");

@@ -1,11 +1,12 @@
 import {createCloudStore} from "./cloud.mjs";
 import {modes, contracts, byId, rolesFor, calculateRound, declarationWon} from "./score.mjs";
+import {playerKey, findPlayer, matchingPlayers, migratePlayers, registerPlayer, renamePlayer, playerStatistics} from "./players.mjs";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
 const toast = document.querySelector("#toast");
 const storageKey = document.body.dataset.storageKey || "carnet-whist-v1";
-const defaults = {active:null, history:[], groups:[], last:null, overrides:{}, piccolo:false};
+const defaults = {active:null, history:[], groups:[], last:null, overrides:{}, piccolo:false, roster:[], lastPlayerIds:null};
 let saved = {};
 try {
   saved = JSON.parse(localStorage.getItem(storageKey) || "{}") ?? {};
@@ -17,13 +18,16 @@ function normalize(snapshot) {
   if (state.active && !state.active.scoringVersion) {
     state.active = {...state.active, scoringVersion:1, overrides:state.overrides, piccolo:false};
   }
-  return state;
+  return migratePlayers(state);
 }
 let page = "home";
 let draft = null;
 let score = null;
 let swap = null;
 let viewedGame = null;
+let viewedPlayerId = null;
+let statsContract = "small";
+let statsOrder = "wins";
 let fromRules = "home";
 let toastTimer;
 let restoreFocus;
@@ -81,7 +85,7 @@ const cloud = document.body.dataset.storage === "supabase" ? createCloudStore({
     storageAction.textContent = action === "resolve" ? "Voir les options" : "Réessayer";
   },
   hasLocal:state => !!(state.active || state.last || state.piccolo || state.history.length ||
-    state.groups.length || Object.keys(state.overrides).length),
+    state.groups.length || state.roster.length || Object.keys(state.overrides).length),
   revision:syncMeta?.revision ?? null,
   dirty:syncMeta?.dirty === true,
 }) : null;
@@ -105,7 +109,7 @@ function go(next) {
   }
 }
 function render() {
-  const screens = {home, setup, table, board, history, archive, rules, groups};
+  const screens = {home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
   app.innerHTML = screens[page]();
   document.querySelectorAll("[data-nav]").forEach(button => {
     if (button.dataset.nav === page) button.setAttribute("aria-current", "page");
@@ -126,7 +130,7 @@ function home() {
   </div><img class="hero-art" src="cards.svg" width="620" height="520" alt=""></div></section>
   <section class="wrap section"><div class="section-heading">
     <div><span class="eyebrow">Autour de la table</span><h2>La partie en trois temps</h2></div>
-    <button class="text-action" data-action="groups">${icon("users")} Groupes de joueurs ${icon("arrow")}</button>
+    <button class="text-action" data-action="players">${icon("users")} Joueurs ${icon("arrow")}</button>
   </div>
     <div class="steps">${steps.map((step, index) => `<article class="step"><div class="step-top"><span class="step-mark">${icon(step.icon)}</span><span class="step-number" aria-hidden="true">0${index + 1}</span></div><h3>${step.title}</h3><p>${step.copy}</p></article>`).join("")}</div>
   </section>`;
@@ -142,9 +146,12 @@ function setup() {
         ${avatar(index)}
         <label><span>Joueur ${index + 1}</span><input class="player-name" name="player${index}" maxlength="24"
           placeholder="Prénom ou surnom" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false"
+          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="player-suggestions-${index}"
           enterkeyhint="${index < count - 1 ? "next" : "go"}" required value="${escape(name)}"></label>
+        <div class="player-suggestions" role="listbox" aria-label="Joueurs proposés" id="player-suggestions-${index}" hidden></div>
       </div>`).join("")}</div>
-      <p class="error" id="setup-error" hidden>Utilise un nom différent pour chaque joueur.</p>
+      <p class="hint">Tape le début d’un pseudo pour retrouver un joueur. Les nouveaux pseudos sont enregistrés au lancement de la partie.</p>
+      <p class="error" id="setup-error" hidden>Choisis un joueur différent à chaque place, y compris pour les anciens pseudos.</p>
       <div class="page-actions"><button class="quiet" type="button" data-action="groups">${icon("users")} Groupes de joueurs</button><button class="btn primary" type="submit">Placer les joueurs ${icon("arrow")}</button></div>
     </form></section>`;
 }
@@ -224,6 +231,68 @@ function groups() {
     ${data.groups.length ? `<div class="list">${data.groups.map((group, index) => `<article class="list-item surface"><div><strong>${escape(group.name)}</strong><small>${group.players.map(escape).join(" · ")}</small></div><button class="btn secondary" data-action="use-group" data-value="${index}">Choisir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♦", "Aucun groupe enregistré", "Tu peux enregistrer les joueurs que tu viens de saisir ou ceux de ta dernière partie.")}
     <div class="page-actions">${data.last ? `<button class="btn secondary" data-action="last-group">Reprendre les derniers joueurs</button>` : ""}<button class="btn primary" data-action="save-group" ${validNames(draft?.players) || data.last ? "" : "disabled"}>Enregistrer un groupe</button></div>
   </section>`;
+}
+function playerCards(query = "") {
+  const players = query.trim() ? matchingPlayers(data.roster, query) : [...data.roster].sort((a,b) => a.nickname.localeCompare(b.nickname,"fr-BE"));
+  return players.length ? `<div class="list">${players.map(player => `<article class="list-item surface"><div><strong>${escape(player.nickname)}</strong><small>${player.aliases.length ? "Anciens pseudos · " + player.aliases.map(escape).join(" · ") : "Joueur enregistré"}</small></div><button class="btn secondary" data-action="view-player" data-value="${escape(player.id)}">Voir la fiche ${icon("arrow")}</button></article>`).join("")}</div>`
+    : empty("♠", "Aucun joueur", query.trim() ? "Aucun pseudo ne correspond à ta recherche." : "Ajoute un joueur ou commence une partie pour créer ton répertoire.");
+}
+function playersPage() {
+  return `<section class="wrap narrow page">${back("home")}${head("Le répertoire de la table", "Joueurs", "Un pseudo, une fiche, toutes ses parties. Retrouve tes joueurs dès les premières lettres.")}
+    <div class="page-actions roster-actions"><button class="btn primary" data-action="new-player">${icon("plus")} Ajouter un joueur</button><button class="btn secondary" data-action="statistics">${icon("scores")} Classements</button><button class="btn secondary" data-action="groups">${icon("users")} Groupes</button></div>
+    <label class="roster-search">Rechercher un pseudo<input id="roster-search" type="search" autocomplete="off" placeholder="Ex. KDE" maxlength="24"></label>
+    <div id="roster-list">${playerCards()}</div>
+  </section>`;
+}
+const successRate = record => Math.round(record.wins / record.attempts * 100) + " %";
+function playerProfile() {
+  const player = data.roster.find(item => item.id === viewedPlayerId);
+  const stats = playerStatistics(data,player.id);
+  const records = Object.entries(stats.contracts);
+  return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Fiche joueur",escape(player.nickname),"Les contrats annoncés par ce joueur, avec leur résultat et les points obtenus.")}
+    <div class="page-actions roster-actions"><button class="btn secondary" data-action="edit-player" data-value="${escape(player.id)}">Modifier le pseudo</button><button class="btn secondary" data-action="statistics">${icon("scores")} Classements</button></div>
+    ${player.aliases.length ? `<p class="hint">Anciens pseudos · ${player.aliases.map(escape).join(" · ")}</p>` : ""}
+    <div class="player-metrics"><article class="surface"><strong>${stats.completedGames}</strong><span>Parties terminées</span></article><article class="surface"><strong>${stats.roundsPlayed}</strong><span>Donnes jouées</span></article><article class="surface"><strong>${records.reduce((total,[,record]) => total + record.attempts,0)}</strong><span>Contrats annoncés</span></article></div>
+    <p class="hint">Les donnes de la partie en cours sont incluses. Les donnes où le joueur est mort sont exclues.</p>
+    ${records.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Résultats par contrat"><thead><tr><th>Contrat</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th><th>Points</th></tr></thead><tbody>${records.map(([id,record]) => `<tr><th scope="row">${escape(byId[id].label)}<small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td><td class="${color(record.points)}">${signed(record.points)}</td></tr>`).join("")}</tbody></table></div>` : empty("♠","Les statistiques commencent à la table","Ses résultats apparaîtront après son premier contrat annoncé.")}
+  </section>`;
+}
+function statisticsPage() {
+  const ranking = data.roster.map(player => ({player,record:playerStatistics(data,player.id).contracts[statsContract]}))
+    .filter(item => item.record).sort((a,b) => {
+      const value = record => statsOrder === "rate" ? record.wins / record.attempts : record[statsOrder];
+      return value(b.record) - value(a.record) || b.record.attempts - a.record.attempts || a.player.nickname.localeCompare(b.player.nickname,"fr-BE");
+    });
+  return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Les résultats de la table","Classements","Compare les contrats remportés, les contrats perdus et les taux de réussite.")}
+    <div class="stats-filters"><label>Contrat<select id="stats-contract">${contracts.map(contract => `<option value="${contract.id}" ${statsContract === contract.id ? "selected" : ""}>${escape(contract.label)}</option>`).join("")}</select></label>
+    <label>Classer par<select id="stats-order">${[["wins","Plus de contrats gagnés"],["losses","Plus de contrats perdus"],["rate","Meilleur taux de réussite"]].map(([value,label]) => `<option value="${value}" ${statsOrder === value ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
+    <p class="hint">Le taux de réussite porte uniquement sur les annonces de chaque joueur. Le nombre de tentatives permet de comparer leur expérience.</p>
+    ${ranking.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Classement par contrat"><thead><tr><th>Joueur</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th></tr></thead><tbody>${ranking.map(({player,record}) => `<tr><th scope="row"><button class="text-action" data-action="view-player" data-value="${escape(player.id)}">${escape(player.nickname)}</button><small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td></tr>`).join("")}</tbody></table></div>` : empty("♣","Aucune annonce pour ce contrat","Le classement apparaîtra après les premières annonces enregistrées.")}
+  </section>`;
+}
+function editPlayer(id = "") {
+  const player = data.roster.find(item => item.id === id);
+  showDialog(`${dialogHead("Fiche joueur", player ? "Modifier le pseudo" : "Nouveau joueur")}<form id="player-form">
+    <div class="dialog-main"><input type="hidden" name="playerId" value="${escape(id)}"><label>Pseudo<input name="nickname" required maxlength="24" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Ex. KDE" value="${escape(player?.nickname ?? "")}"></label>
+    <p class="hint">${player ? "Ses parties restent reliées à sa fiche. Son ancien pseudo permettra aussi de le retrouver." : "Le joueur pourra être sélectionné dans tes prochaines parties."}</p><p class="error" role="alert" hidden>Ce pseudo est déjà utilisé par un autre joueur.</p></div>
+    <div class="dialog-actions"><button type="button" class="btn secondary" data-action="close">Annuler</button><button type="submit" class="btn primary">Enregistrer</button></div></form>`);
+  dialog.querySelector('[name="nickname"]')?.focus();
+}
+function draftPlayerIds(names = draft.players) {
+  return names.map((name,index) => {
+    const selected = data.roster.find(player => player.id === draft.playerIds[index]);
+    return selected && [selected.nickname,...selected.aliases].some(alias => playerKey(alias) === playerKey(name))
+      ? selected.id : findPlayer(data.roster,name)?.id ?? null;
+  });
+}
+function updateSuggestions(input) {
+  const index = Number(input.name.slice(6));
+  const list = app.querySelector("#player-suggestions-" + index);
+  const selected = new Set(draftPlayerIds().filter((_,seat) => seat !== index));
+  const matches = matchingPlayers(data.roster,input.value).filter(player => !selected.has(player.id) && playerKey(player.nickname) !== playerKey(input.value)).slice(0,6);
+  list.innerHTML = matches.map(player => `<button type="button" role="option" aria-selected="false" data-action="select-player" data-value="${escape(player.id)}" data-seat="${index}"><strong>${escape(player.nickname)}</strong>${player.aliases.length ? `<small>${player.aliases.map(escape).join(" · ")}</small>` : ""}</button>`).join("");
+  list.hidden = !matches.length;
+  input.setAttribute("aria-expanded",String(!!matches.length));
 }
 const ruleValue = (contract, field) => data.overrides[contract.id]?.[field] ?? contract[field];
 function ruleInput(items, fields, sign, label) {
@@ -362,10 +431,12 @@ function renderScore() {
   dialog.scrollTop = scroll;
 }
 function validNames(names) {
-  return [4, 5].includes(names?.length) && names.every(name => name.trim()) && new Set(names.map(name => name.trim().toLocaleLowerCase("fr-BE"))).size === names.length;
+  return [4, 5].includes(names?.length) && names.every(name => name.trim()) &&
+    new Set(names.map(name => findPlayer(data.roster,name)?.id ?? "name:" + playerKey(name))).size === names.length;
 }
-function newDraft(names = ["", "", "", ""]) {
-  draft = {players:[...names], dealer:0};
+function newDraft(names = ["", "", "", ""], ids = []) {
+  const players = names.map((name,index) => data.roster.find(player => player.id === ids[index]) ?? findPlayer(data.roster,name));
+  draft = {players:names.map((name,index) => players[index]?.nickname ?? name),playerIds:players.map(player => player?.id ?? null), dealer:0};
   swap = null;
   go("setup");
 }
@@ -399,8 +470,10 @@ function recordScore() {
   tell(index === null ? "Score enregistré." : "Donne corrigée.");
 }
 function launchGame() {
-  data.active = {players:[...draft.players], dealer:draft.dealer, rounds:[], scoringVersion:2, overrides:data.overrides, piccolo:data.piccolo};
+  const playerIds = draftPlayerIds().map((id,index) => id ?? registerPlayer(data.roster,draft.players[index]).id);
+  data.active = {players:[...draft.players], playerIds, dealer:draft.dealer, rounds:[], scoringVersion:2, overrides:data.overrides, piccolo:data.piccolo};
   data.last = [...draft.players];
+  data.lastPlayerIds = [...playerIds];
   draft = null;
   save();
   if (dialog.open) dialog.close();
@@ -422,7 +495,10 @@ const actions = {
     const seat = Number(value);
     if (swap === null) swap = seat;
     else {
-      if (swap !== seat) [draft.players[swap], draft.players[seat]] = [draft.players[seat], draft.players[swap]];
+      if (swap !== seat) {
+        [draft.players[swap], draft.players[seat]] = [draft.players[seat], draft.players[swap]];
+        [draft.playerIds[swap], draft.playerIds[seat]] = [draft.playerIds[seat], draft.playerIds[swap]];
+      }
       swap = null;
     }
     render();
@@ -434,8 +510,24 @@ const actions = {
   },
   "confirm-start"() { launchGame(); },
   groups() { go("groups"); },
-  "use-group"(value) { newDraft(data.groups[Number(value)].players); },
-  "last-group"() { newDraft(data.last); },
+  players() { go("players"); },
+  "view-player"(id) { viewedPlayerId = id; go("profile"); },
+  statistics() { go("statistics"); },
+  "new-player"() { editPlayer(); },
+  "edit-player"(id) { editPlayer(id); },
+  "select-player"(id,seat) {
+    const index = Number(seat);
+    const player = data.roster.find(item => item.id === id);
+    draft.players[index] = player.nickname;
+    draft.playerIds[index] = player.id;
+    const input = app.querySelector('[name="player' + index + '"]');
+    input.value = player.nickname;
+    app.querySelector("#player-suggestions-" + index).hidden = true;
+    input.setAttribute("aria-expanded","false");
+    input.focus({preventScroll:true});
+  },
+  "use-group"(value) { const group = data.groups[Number(value)]; newDraft(group.players,group.playerIds); },
+  "last-group"() { newDraft(data.last,data.lastPlayerIds); },
   "save-group"() {
     showDialog(`${dialogHead("Groupes de joueurs", "Enregistrer un groupe")}<form id="group-form">
       <div class="dialog-main"><label>Nom du groupe<input name="group" required maxlength="32" autofocus placeholder="Ex. La table du vendredi"></label><p class="error" hidden>Choisis un nom de groupe différent.</p></div>
@@ -504,10 +596,44 @@ function keepPlayerInputVisible() {
   }, 90);
 }
 app.addEventListener("focusin", keepPlayerInputVisible);
+app.addEventListener("focusin", event => {
+  if (event.target.matches(".player-name")) updateSuggestions(event.target);
+});
+app.addEventListener("focusout", event => {
+  const card = event.target.closest(".player-input");
+  if (!card || card.contains(event.relatedTarget)) return;
+  card.querySelector(".player-suggestions").hidden = true;
+  card.querySelector(".player-name").setAttribute("aria-expanded","false");
+});
 window.visualViewport?.addEventListener("resize", keepPlayerInputVisible);
 window.addEventListener("resize", keepPlayerInputVisible);
 app.addEventListener("keydown", event => {
   const input = event.target;
+  const option = input.closest(".player-suggestions button");
+  if (option && ["ArrowDown","ArrowUp","Escape"].includes(event.key)) {
+    event.preventDefault();
+    const list = option.parentElement;
+    if (event.key === "Escape") {
+      const field = list.parentElement.querySelector(".player-name");
+      field.focus();
+      list.hidden = true;
+      field.setAttribute("aria-expanded","false");
+    } else {
+      const options = [...list.querySelectorAll("button")];
+      const next = options.indexOf(option) + (event.key === "ArrowDown" ? 1 : -1);
+      options[(next + options.length) % options.length].focus();
+    }
+    return;
+  }
+  if (input.matches(".player-name")) {
+    const list = app.querySelector("#player-suggestions-" + input.name.slice(6));
+    if (event.key === "Escape") { list.hidden = true; input.setAttribute("aria-expanded","false"); return; }
+    if (event.key === "ArrowDown" && !list.hidden) {
+      event.preventDefault();
+      list.querySelector("button")?.focus();
+      return;
+    }
+  }
   if (!compactSetup.matches || event.key !== "Enter" || event.isComposing || !input.matches(".player-name")) return;
   event.preventDefault();
 
@@ -518,16 +644,35 @@ app.addEventListener("keydown", event => {
   else form.requestSubmit();
 });
 app.addEventListener("input", event => {
+  if (event.target.id === "roster-search") {
+    app.querySelector("#roster-list").innerHTML = playerCards(event.target.value);
+    return;
+  }
   if (event.target.form?.id === "setup-form" && event.target.name.startsWith("player")) {
     draft.players[Number(event.target.name.slice(6))] = event.target.value;
+    draft.playerIds[Number(event.target.name.slice(6))] = null;
     app.querySelector("#setup-error").hidden = true;
+    updateSuggestions(event.target);
   }
 });
 app.addEventListener("change", event => {
+  if (["stats-contract","stats-order"].includes(event.target.id)) {
+    const id = event.target.id;
+    if (id === "stats-contract") statsContract = event.target.value;
+    else statsOrder = event.target.value;
+    render();
+    app.querySelector("#" + id).focus({preventScroll:true});
+    return;
+  }
   if (event.target.form?.id === "setup-form" && event.target.name === "size") {
     const count = Number(event.target.value);
-    if (count === 5) draft.players.push(draft.fifthPlayer ?? "");
-    else draft.fifthPlayer = draft.players.pop();
+    if (count === 5) {
+      draft.players.push(draft.fifthPlayer ?? "");
+      draft.playerIds.push(draft.fifthPlayerId ?? null);
+    } else {
+      draft.fifthPlayer = draft.players.pop();
+      draft.fifthPlayerId = draft.playerIds.pop();
+    }
     if (draft.dealer >= count) draft.dealer = 0;
     render();
     app.querySelector('[name="size"]:checked').focus();
@@ -550,6 +695,8 @@ document.addEventListener("submit", event => {
         return;
       }
       draft.players = names;
+      draft.playerIds = draftPlayerIds(names);
+      draft.players = names.map((name,index) => data.roster.find(player => player.id === draft.playerIds[index])?.nickname ?? name);
       go("table");
       break;
     }
@@ -574,6 +721,27 @@ document.addEventListener("submit", event => {
       tell("Barème enregistré.");
       break;
     }
+    case "player-form": {
+      event.preventDefault();
+      const nickname = fields.get("nickname").trim();
+      const id = fields.get("playerId");
+      if (!nickname || nickname.length > 24 || (id ? !renamePlayer(data.roster,id,nickname) : findPlayer(data.roster,nickname))) {
+        form.querySelector(".error").hidden = false;
+        return;
+      }
+      if (!id) registerPlayer(data.roster,nickname);
+      if (id) {
+        const relabel = (names,ids) => names.map((name,index) => ids?.[index] === id ? nickname : name);
+        if (data.active) data.active.players = relabel(data.active.players,data.active.playerIds);
+        if (data.last) data.last = relabel(data.last,data.lastPlayerIds);
+        data.groups.forEach(group => {group.players = relabel(group.players,group.playerIds);});
+      }
+      save();
+      dialog.close();
+      go("players");
+      tell(id ? "Pseudo mis à jour." : "Joueur enregistré.");
+      break;
+    }
     case "group-form": {
       event.preventDefault();
       const name = fields.get("group").trim();
@@ -582,7 +750,8 @@ document.addEventListener("submit", event => {
         return;
       }
       const players = (validNames(draft?.players) ? draft.players : data.last).map(player => player.trim());
-      data.groups.push({name, players});
+      const playerIds = players.map(player => registerPlayer(data.roster,player).id);
+      data.groups.push({name, players,playerIds});
       save();
       dialog.close();
       render();

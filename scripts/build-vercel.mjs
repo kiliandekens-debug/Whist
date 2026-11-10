@@ -9,7 +9,7 @@ if (!url?.startsWith("https://") || !key || key.startsWith("sb_secret_")) {
 const output = new URL("../vercel-public/", import.meta.url);
 await rm(output, {recursive:true,force:true});
 await mkdir(output, {recursive:true});
-for (const name of ["app.mjs","cloud.mjs","score.mjs","style.css","cards.svg","icon.svg"]) {
+for (const name of ["app.mjs","cloud.mjs","score.mjs","players.mjs","style.css","cards.svg","icon.svg"]) {
   await copyFile(new URL("../" + name, import.meta.url), new URL(name, output));
 }
 let html = await readFile(new URL("../index.html", import.meta.url), "utf8");
