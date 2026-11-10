@@ -1,0 +1,120 @@
+export const modes = {
+  duo: {name: "Duo", suit: "♣"},
+  solo: {name: "Solo", suit: "♠"},
+  misery: {name: "Misère", suit: "♥"},
+  other: {name: "Autres", suit: "♦"},
+};
+
+export const contracts = [
+  ...[5, 5, 7, 9, 15, 20].map((points, index) => {
+    const target = index + 8;
+    return {
+      id: "duo" + target, mode: "duo", label: "Duo " + target, target, players: 2,
+      win: points, loss: points, bonus: 2, penalty: 2, capot: 20,
+    };
+  }),
+  ...[9, 12, 18].map((points, index) => {
+    const target = index + 6;
+    return {
+      id: "solo" + target, mode: "solo", label: "Solo " + target, target, players: 1,
+      win: points, loss: points, bonus: 3, penalty: 3, maximum: 8,
+    };
+  }),
+  {id:"small", mode:"misery", label:"Petite misère", target:0, players:1, multiple:true, win:18, loss:21},
+  {id:"solo8small", mode:"misery", label:"Solo 8 sur petite misère", target:8, players:1, win:18, loss:21},
+  {id:"large", mode:"misery", label:"Grande misère", target:0, players:1, multiple:true, win:36, loss:42},
+  {id:"largetrou", mode:"misery", label:"Grande misère sur trou", target:0, players:1, multiple:true, win:42, loss:48},
+  {id:"piccolo", mode:"misery", label:"Piccolo", target:1, players:1, exact:true, win:24, loss:24},
+  {id:"trou", mode:"other", label:"Trou", target:9, players:2, win:10, loss:10, bonus:3, penalty:3, capot:30},
+  {id:"ab9", mode:"other", label:"Abondance", target:9, players:1, win:30, loss:36},
+  {id:"ab10", mode:"other", label:"Abondance 10", target:10, players:1, win:33, loss:39},
+  {id:"ab11", mode:"other", label:"Abondance 11", target:11, players:1, win:36, loss:42},
+  {id:"smallslam", mode:"other", label:"Petit Solo Chelem", target:12, players:1, win:60, loss:72},
+  {id:"slam", mode:"other", label:"Solo Chelem", target:13, players:1, win:90, loss:102},
+];
+
+export const byId = Object.fromEntries(contracts.map(contract => [contract.id, contract]));
+export const seats = [0, 1, 2, 3];
+
+export function rolesFor({players, dealer: openingDealer}, roundIndex = 0) {
+  const count = players.length;
+  const dealer = (openingDealer + roundIndex) % count;
+  const dead = count === 5 ? (dealer + 1) % count : null;
+  const first = ((dead ?? dealer) + 1) % count;
+  return {dealer, dead, first};
+}
+
+export function calculateRound(game, roundIndex, contract, entries, tricks, doubled, overrides) {
+  const {dead} = rolesFor(game, roundIndex);
+  const active = game.players.map((_, seat) => seat).filter(seat => seat !== dead);
+  const declarations = entries.map(entry => ({...entry, seat:active.indexOf(entry.seat)}));
+  if (declarations.some(entry => entry.seat === -1)) return null;
+  const scores = calculate(contract, declarations, tricks, doubled, overrides, game.scoringVersion);
+  return game.players.map((_, seat) => seat === dead ? 0 : scores[active.indexOf(seat)]);
+}
+
+// Keep the first barème available for games started before the update.
+const legacyPoints = {
+  small:18, solo8small:27, large:36, largetrou:42, trou:16,
+  ab9:30, ab10:42, ab11:60, smallslam:120, slam:200,
+};
+function legacyRules(contract) {
+  const {mode, target, id} = contract;
+  if (mode === "duo") {
+    const base = 8 + (target - 8) * 3;
+    return {win:base, loss:base, bonus:3, penalty:3, capot:30};
+  }
+  if (mode === "solo") {
+    const base = 12 + (target - 6) * 3;
+    return {win:base, loss:base};
+  }
+  return {win:legacyPoints[id], loss:legacyPoints[id], bonus:0, penalty:0};
+}
+
+export function calculate(contract, entries, tricks, doubled, overrides = {}, version = 2) {
+  const previousRules = version === 1 ? legacyRules(contract) : {};
+  const {target, win, loss, bonus = 0, penalty = 0, capot, maximum = 13} = {...contract, ...previousRules, ...overrides};
+  const scores = seats.map(() => 0);
+  const factor = doubled ? 2 : 1;
+  if (contract.players === 2) {
+    const points = tricks >= target
+      ? (tricks === 13 && capot != null ? capot : win + (tricks - target) * bonus)
+      : -(loss + (target - tricks) * penalty);
+    if (!points) return scores;
+    return scores.map((_, index) => points * factor * (entries.some(entry => entry.seat === index) ? 1 : -1));
+  }
+  if (target === 0 && entries.length === 2) {
+    const [first, second] = entries;
+    const bothWon = first.tricks === 0 && second.tricks === 0;
+    const bothLost = first.tricks > 0 && second.tricks > 0;
+    const winPer = Math.floor(win / 2);
+    const lossPer = Math.floor(loss / 2);
+    if (bothWon || bothLost) {
+      const points = (bothWon ? winPer : -lossPer) * factor;
+      if (!points) return scores;
+      return scores.map((_, index) => entries.some(entry => entry.seat === index) ? points : -points);
+    }
+    const winner = first.tricks === 0 ? first : second;
+    const loser = winner === first ? second : first;
+    const wonPoints = win - Math.floor(win / 6);
+    const lostPoints = version === 1 ? wonPoints + 2 * Math.floor(loss / 6) : loss;
+    const difference = lostPoints - wonPoints;
+    const defenders = seats.filter(seat => seat !== winner.seat && seat !== loser.seat);
+    scores[winner.seat] = wonPoints * factor;
+    scores[loser.seat] = -lostPoints * factor;
+    scores[defenders[0]] = Math.floor(difference / 2) * factor;
+    scores[defenders[1]] = Math.ceil(difference / 2) * factor;
+    return scores.map(value => value || 0);
+  }
+  const won = target === 0 || contract.exact ? tricks === target : tricks >= target;
+  const points = won ? win + Math.max(0, Math.min(maximum, tricks) - target) * bonus
+    : -(loss + Math.max(0, target - tricks) * penalty);
+  const declarer = entries[0].seat;
+  scores[declarer] = points * factor;
+  const split = Math.floor(Math.abs(points) / 3);
+  const remainder = Math.abs(points) % 3;
+  for (let offset = 1; offset <= 3; offset++) {
+    scores[(declarer + offset) % 4] = (split + Number(offset <= remainder)) * factor * -Math.sign(points);
+  }
+  return scores.map(value => value || 0);
+}

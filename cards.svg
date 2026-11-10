@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 520" fill="none">
+  <defs>
+    <linearGradient id="felt" x1="76" y1="475" x2="551" y2="18" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#182e25"/><stop offset="1" stop-color="#2c4a3b"/>
+    </linearGradient>
+    <linearGradient id="lime" x1="-107" y1="-145" x2="104" y2="155" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eff8b3"/><stop offset="1" stop-color="#c6df69"/>
+    </linearGradient>
+    <linearGradient id="ivory" x1="-92" y1="-150" x2="106" y2="146" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff9ea"/><stop offset="1" stop-color="#d6ceaf"/>
+    </linearGradient>
+    <filter id="shadow" x="-60%" y="-45%" width="220%" height="225%">
+      <feDropShadow dx="0" dy="15" stdDeviation="14" flood-color="#07130e" flood-opacity=".45"/>
+    </filter>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0v24" stroke="#d5edab" stroke-opacity=".13" stroke-width=".65"/>
+    </pattern>
+    <pattern id="weave" width="22" height="22" patternUnits="userSpaceOnUse">
+      <path d="M11 1 21 11 11 21 1 11Z M0 11H22M11 0V22" stroke="#a3b96c" stroke-opacity=".65" stroke-width=".7"/>
+    </pattern>
+    <path id="spade" d="M0-72c-13 23-69 54-69 91 0 37 43 49 64 19-2 20-11 36-23 44h56C16 74 7 58 5 38c21 30 64 18 64-19 0-37-56-68-69-91Z"/>
+    <path id="diamond" d="M0-62 43 0 0 62-43 0Z"/>
+    <path id="star" d="M0-18 3-3 18 0 3 3 0 18-3 3-18 0-3-3Z"/>
+    <g id="ace-index" fill="#193124">
+      <text x="-81" y="-103" font-family="Georgia,serif" font-size="33">A</text>
+      <use href="#spade" transform="translate(-70 -89) scale(.103)"/>
+    </g>
+    <g id="queen-index" fill="#923f33">
+      <text x="-79" y="-103" font-family="Georgia,serif" font-size="31">Q</text>
+      <use href="#diamond" transform="translate(-67 -87) scale(.13)"/>
+    </g>
+  </defs>
+  <rect x="12" y="12" width="596" height="496" rx="21" fill="url(#felt)"/>
+  <rect x="23" y="23" width="574" height="474" rx="14" fill="url(#grid)" stroke="#afc28b" stroke-opacity=".32"/>
+  <path d="M35 77V35h42m466 0h42v42m0 366v42h-42m-466 0H35v-42" stroke="#b5cc8a" stroke-opacity=".65"/>
+  <g stroke="#c0d992" stroke-opacity=".42">
+    <circle cx="313" cy="258" r="190" stroke-dasharray="1 5"/>
+    <circle cx="313" cy="258" r="173" stroke-width=".65"/>
+    <ellipse cx="313" cy="258" rx="232" ry="109" transform="rotate(-26 313 258)" stroke-width=".65"/>
+    <path d="M76 258h475M313 44v428" stroke-width=".65" stroke-dasharray="5 5"/>
+  </g>
+  <g fill="#ddec9e">
+    <use href="#star" transform="translate(108 141) scale(.72)"/>
+    <use href="#star" transform="translate(518 131) scale(.92)"/>
+    <use href="#star" transform="translate(513 365) scale(.56)"/>
+    <use href="#star" transform="translate(128 411) scale(.47)"/>
+    <circle cx="103" cy="337" r="2"/><circle cx="520" cy="296" r="2"/><circle cx="442" cy="444" r="2"/><circle cx="193" cy="77" r="2"/>
+  </g>
+  <g fill="#e5edc6" font-family="monospace" font-size="10" letter-spacing="2">
+    <text x="50" y="59">WHIST BELGE</text><text x="48" y="471">♠  ♥  ♣  ♦</text>
+    <text x="573" y="471" text-anchor="end">52 CARTES</text>
+  </g>
+  <g transform="translate(214 258) rotate(-24)" filter="url(#shadow)">
+    <rect x="-96" y="-147" width="192" height="294" rx="13" fill="#d8e2a3"/>
+    <rect x="-90" y="-141" width="180" height="282" rx="9" fill="#264b39"/>
+    <rect x="-82" y="-133" width="164" height="266" rx="6" fill="url(#weave)" stroke="#b4ca87"/>
+    <path d="M0-102 60 0 0 102-60 0Z" fill="#203e30" stroke="#c2d390"/>
+    <path d="M0-90 52 0 0 90-52 0Z" stroke="#c2d390" stroke-width=".7"/>
+    <use href="#star" transform="scale(2.2)" fill="#dbeaaa"/>
+  </g>
+  <g transform="translate(405 249) rotate(22)" filter="url(#shadow)">
+    <rect x="-96" y="-147" width="192" height="294" rx="13" fill="url(#ivory)" stroke="#fff6db"/>
+    <rect x="-88" y="-139" width="176" height="278" rx="8" stroke="#b09e78"/>
+    <use href="#queen-index"/><use href="#queen-index" transform="rotate(180)"/>
+    <g stroke="#923f33">
+      <path d="M0-92 60 0 0 92-60 0Z M0-78 51 0 0 78-51 0Z"/>
+      <path d="M-55 0H55M0-86v172" stroke-dasharray="2 3"/>
+    </g>
+    <use href="#diamond" transform="scale(.72)" fill="#923f33"/>
+  </g>
+  <g transform="translate(308 271) rotate(-7)" filter="url(#shadow)">
+    <rect x="-99" y="-152" width="198" height="304" rx="13" fill="url(#lime)" stroke="#f5fac8"/>
+    <rect x="-91" y="-144" width="182" height="288" rx="9" stroke="#628044" stroke-opacity=".78"/>
+    <use href="#ace-index"/><use href="#ace-index" transform="rotate(180)"/>
+    <g stroke="#5d783c">
+      <circle r="73" stroke-width=".7"/><circle r="65" stroke-dasharray="1 3"/>
+      <path d="M0-104 76 0 0 104-76 0Z" stroke-width=".7"/>
+    </g>
+    <use href="#spade" transform="translate(0 -6) scale(.72)" fill="#193124"/>
+    <g fill="#365732">
+      <use href="#star" transform="translate(0 -89) scale(.45)"/><use href="#star" transform="translate(0 89) scale(.45)"/>
+      <use href="#star" transform="translate(80 0) scale(.37)"/><use href="#star" transform="translate(-80 0) scale(.37)"/>
+    </g>
+  </g>
+</svg>
