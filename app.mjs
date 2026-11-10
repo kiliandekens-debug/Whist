@@ -26,6 +26,7 @@ let score = null;
 let swap = null;
 let viewedGame = null;
 let viewedPlayerId = null;
+let playerToDelete = null;
 let statsContract = "small";
 let statsOrder = "wins";
 let fromRules = "home";
@@ -240,6 +241,7 @@ function playerCards(query = "") {
 function playersPage() {
   return `<section class="wrap narrow page">${back("home")}${head("Le répertoire de la table", "Joueurs", "Un pseudo, une fiche, toutes ses parties. Retrouve tes joueurs dès les premières lettres.")}
     <div class="page-actions roster-actions"><button class="btn primary" data-action="new-player">${icon("plus")} Ajouter un joueur</button><button class="btn secondary" data-action="statistics">${icon("scores")} Classements</button><button class="btn secondary" data-action="groups">${icon("users")} Groupes</button></div>
+    ${data.roster.length ? '<button class="quiet roster-delete" data-action="clear-players">Vider le répertoire</button>' : ""}
     <label class="roster-search">Rechercher un pseudo<input id="roster-search" type="search" autocomplete="off" placeholder="Ex. KDE" maxlength="24"></label>
     <div id="roster-list">${playerCards()}</div>
   </section>`;
@@ -250,7 +252,7 @@ function playerProfile() {
   const stats = playerStatistics(data,player.id);
   const records = Object.entries(stats.contracts);
   return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Fiche joueur",escape(player.nickname),"Les contrats annoncés par ce joueur, avec leur résultat et les points obtenus.")}
-    <div class="page-actions roster-actions"><button class="btn secondary" data-action="edit-player" data-value="${escape(player.id)}">Modifier le pseudo</button><button class="btn secondary" data-action="statistics">${icon("scores")} Classements</button></div>
+    <div class="page-actions roster-actions"><button class="btn secondary" data-action="edit-player" data-value="${escape(player.id)}">Modifier le pseudo</button><button class="btn secondary" data-action="statistics">${icon("scores")} Classements</button><button class="quiet roster-delete" data-action="delete-player" data-value="${escape(player.id)}">Supprimer le joueur</button></div>
     ${player.aliases.length ? `<p class="hint">Anciens pseudos · ${player.aliases.map(escape).join(" · ")}</p>` : ""}
     <div class="player-metrics"><article class="surface"><strong>${stats.completedGames}</strong><span>Parties terminées</span></article><article class="surface"><strong>${stats.roundsPlayed}</strong><span>Donnes jouées</span></article><article class="surface"><strong>${records.reduce((total,[,record]) => total + record.attempts,0)}</strong><span>Contrats annoncés</span></article></div>
     <p class="hint">Les donnes de la partie en cours sont incluses. Les donnes où le joueur est mort sont exclues.</p>
@@ -515,6 +517,31 @@ const actions = {
   statistics() { go("statistics"); },
   "new-player"() { editPlayer(); },
   "edit-player"(id) { editPlayer(id); },
+  "delete-player"(id) {
+    playerToDelete = id;
+    const player = data.roster.find(item => item.id === id);
+    ask("Supprimer " + escape(player.nickname) + " ?", "Ce joueur sera retiré du répertoire, des suggestions et des classements. Ses anciennes parties resteront consultables avec leurs scores.", "confirm-delete-player", "Supprimer le joueur");
+  },
+  "confirm-delete-player"() {
+    data.roster = data.roster.filter(player => player.id !== playerToDelete);
+    playerToDelete = null;
+    viewedPlayerId = null;
+    save();
+    dialog.close();
+    go("players");
+    tell("Joueur supprimé du répertoire.");
+  },
+  "clear-players"() {
+    ask("Vider le répertoire ?", "Toutes les fiches joueurs seront retirées du répertoire, des suggestions et des classements. Les anciennes parties et leurs scores resteront consultables.", "confirm-clear-players", "Vider le répertoire");
+  },
+  "confirm-clear-players"() {
+    data.roster = [];
+    viewedPlayerId = null;
+    save();
+    dialog.close();
+    go("players");
+    tell("Le répertoire est vide.");
+  },
   "select-player"(id,seat) {
     const index = Number(seat);
     const player = data.roster.find(item => item.id === id);

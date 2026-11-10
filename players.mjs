@@ -40,21 +40,16 @@ export function renamePlayer(roster, id, nickname) {
   return true;
 }
 
-// Stable legacy IDs make the same old snapshot migrate identically on each device.
+// Keep historical identities separate from the editable directory.
 export function migratePlayers(state) {
-  const roster = (state.roster ?? []).map(player => ({...player, aliases:[...(player.aliases ?? [])]}));
+  const roster = (state.rosterVersion === 2 ? state.roster ?? [] : [])
+    .map(player => ({...player, aliases:[...(player.aliases ?? [])]}));
   function link(names, ids = []) {
-    return names.map((name, index) => {
-      let player = roster.find(item => item.id === ids?.[index]) ?? findPlayer(roster, name);
-      if (!player) {
-        player = {id:"legacy:" + encodeURIComponent(playerKey(name)),nickname:name.trim(),aliases:[]};
-        roster.push(player);
-      }
-      return player.id;
-    });
+    return names.map((name, index) => ids?.[index] ?? findPlayer(roster,name)?.id ??
+      "legacy:" + encodeURIComponent(playerKey(name)));
   }
   const game = value => value ? {...value,playerIds:link(value.players,value.playerIds)} : null;
-  return {...state,roster,active:game(state.active),history:state.history.map(game),
+  return {...state,roster,rosterVersion:2,active:game(state.active),history:state.history.map(game),
     groups:state.groups.map(group => ({...group,playerIds:link(group.players,group.playerIds)})),
     lastPlayerIds:state.last ? link(state.last,state.lastPlayerIds) : null};
 }

@@ -499,3 +499,5 @@ nav[hidden] {display:none}
   .player-metrics article {padding:13px 9px}
   .player-metrics strong {font-size:30px}
 }
+.roster-delete {color:#963c35}
+button.roster-delete {min-height:44px;margin-bottom:12px}
