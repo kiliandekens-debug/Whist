@@ -45,7 +45,7 @@ export function migratePlayers(state) {
   const roster = (state.roster ?? []).map(player => ({...player, aliases:[...(player.aliases ?? [])]}));
   function link(names, ids = []) {
     return names.map((name, index) => {
-      let player = roster.find(item => item.id === ids[index]) ?? findPlayer(roster, name);
+      let player = roster.find(item => item.id === ids?.[index]) ?? findPlayer(roster, name);
       if (!player) {
         player = {id:"legacy:" + encodeURIComponent(playerKey(name)),nickname:name.trim(),aliases:[]};
         roster.push(player);
