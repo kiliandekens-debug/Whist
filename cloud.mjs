@@ -8,15 +8,18 @@ function canonical(value) {
   return JSON.stringify(value);
 }
 
-async function request(options) {
+async function request(options, authorize) {
+  const headers = new Headers(options?.headers);
+  if (authorize) headers.set("Authorization", "Bearer " + await authorize());
   return fetch(endpoint, {
     ...options,
+    headers,
     cache:"no-store",
     signal:AbortSignal.timeout(6000),
   });
 }
 
-export function createCloudStore({read, write, report, hasLocal, revision, dirty}) {
+export function createCloudStore({read, write, report, hasLocal, revision, dirty, authorize}) {
   let onlineRevision = null;
   let busy = false;
   let changes = 0;
@@ -37,7 +40,7 @@ export function createCloudStore({read, write, report, hasLocal, revision, dirty
           method:"PUT",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({revision:onlineRevision,snapshot:read()}),
-        });
+        }, authorize);
         if (response.status === 409) {
           conflict = true;
           report("Deux versions à comparer", "resolve");
@@ -62,7 +65,7 @@ export function createCloudStore({read, write, report, hasLocal, revision, dirty
     busy = true;
     report("Synchronisation…");
     try {
-      const response = await request();
+      const response = await request(undefined, authorize);
       if (!response.ok) throw Error("Cloud read failed");
       const remote = await response.json();
       const local = read();

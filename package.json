@@ -1,0 +1,1 @@
+{"name":"carnet-whist","private":true,"type":"module","scripts":{"build":"node scripts/build-vercel.mjs"},"dependencies":{"@supabase/supabase-js":"2.119.0"},"devDependencies":{"esbuild":"0.28.2"}}

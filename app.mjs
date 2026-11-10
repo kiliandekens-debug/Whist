@@ -4,7 +4,7 @@ import {modes, contracts, byId, rolesFor, calculateRound} from "./score.mjs";
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
 const toast = document.querySelector("#toast");
-const storageKey = "carnet-whist-v1";
+const storageKey = document.body.dataset.storageKey || "carnet-whist-v1";
 const defaults = {active:null, history:[], groups:[], last:null, overrides:{}, piccolo:false};
 let saved = {};
 try {
@@ -68,6 +68,7 @@ const storageStatus = document.querySelector("#cloud-status");
 const storageAction = document.querySelector("#cloud-action");
 let storageMode;
 const cloud = document.body.dataset.storage === "supabase" ? createCloudStore({
+  authorize:window.whistAuth?.getAccessToken,
   read:() => data,
   write(snapshot, meta) {
     if (snapshot !== data) data = normalize(snapshot);

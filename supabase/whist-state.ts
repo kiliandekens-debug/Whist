@@ -34,9 +34,30 @@ async function authorized(request: Request) {
 async function handle(request: Request) {
   if (!["GET","PUT"].includes(request.method)) return result({error:"method"},405);
   if (!supabaseUrl || !serviceKey) return result({error:"unavailable"},503);
-  if (!(await authorized(request))) return result({error:"unauthorized"},401);
-
-  const owner = request.headers.get("X-Whist-Owner");
+  let owner: string | null;
+  if (request.headers.has("X-Whist-Site-Key")) {
+    if (!(await authorized(request))) return result({error:"unauthorized"},401);
+    owner = request.headers.get("X-Whist-Owner");
+  } else {
+    const authorization = request.headers.get("Authorization");
+    if (!authorization?.startsWith("Bearer ")) return result({error:"unauthorized"},401);
+    const response = await fetch(supabaseUrl + "/auth/v1/user", {
+      headers:{apikey:serviceKey,Authorization:authorization},
+      signal:AbortSignal.timeout(5000),
+      redirect:"error",
+    });
+    if (response.status >= 500) throw Error("Identity unavailable");
+    if (!response.ok) return result({error:"unauthorized"},401);
+    const user = await response.json();
+    if (!user.email || !user.email_confirmed_at || user.is_anonymous) return result({error:"unauthorized"},401);
+    const query = new URLSearchParams({email:"eq." + user.email.toLowerCase(),select:"owner_id"});
+    const access = await dataRequest("whist_account_access?" + query);
+    if (!access.ok) throw Error("Access unavailable");
+    const [account] = await access.json();
+    if (!account) return result({error:"forbidden"},403);
+    owner = account.owner_id;
+    if (request.headers.get("X-Whist-Environment") === "preview") owner += "_preview";
+  }
   if (!owner || !/^[A-Za-z0-9_-]{1,200}$/.test(owner)) return result({error:"owner"},400);
   const row = new URLSearchParams({owner_id:"eq." + owner,select:"revision,snapshot"});
   if (request.method === "GET") {
