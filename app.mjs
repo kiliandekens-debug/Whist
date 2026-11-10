@@ -1,3 +1,4 @@
+import {createCloudStore} from "./cloud.mjs";
 import {modes, contracts, byId, rolesFor, calculateRound} from "./score.mjs";
 
 const app = document.querySelector("#app");
@@ -5,14 +6,18 @@ const dialog = document.querySelector("#dialog");
 const toast = document.querySelector("#toast");
 const storageKey = "carnet-whist-v1";
 const defaults = {active:null, history:[], groups:[], last:null, overrides:{}, piccolo:false};
-let data;
+let saved = {};
 try {
-  data = {...defaults, ...JSON.parse(localStorage.getItem(storageKey) || "null")};
-} catch {
-  data = {...defaults};
-}
-if (data.active && !data.active.scoringVersion) {
-  Object.assign(data.active, {scoringVersion:1, overrides:data.overrides, piccolo:false});
+  saved = JSON.parse(localStorage.getItem(storageKey) || "{}") ?? {};
+} catch {}
+const {_supabase: syncMeta, ...savedGame} = saved;
+let data = normalize(savedGame);
+function normalize(snapshot) {
+  const state = {...defaults, ...snapshot};
+  if (state.active && !state.active.scoringVersion) {
+    state.active = {...state.active, scoringVersion:1, overrides:state.overrides, piccolo:false};
+  }
+  return state;
 }
 let page = "home";
 let draft = null;
@@ -59,9 +64,34 @@ function tell(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {toast.textContent = "";}, 3200);
 }
-function save() {
-  try { localStorage.setItem(storageKey, JSON.stringify(data)); }
+const storageStatus = document.querySelector("#cloud-status");
+const storageAction = document.querySelector("#cloud-action");
+let storageMode;
+const cloud = document.body.dataset.storage === "supabase" ? createCloudStore({
+  read:() => data,
+  write(snapshot, meta) {
+    if (snapshot !== data) data = normalize(snapshot);
+    persist({...data,_supabase:meta});
+  },
+  report(message, action) {
+    storageStatus.textContent = message;
+    storageMode = action;
+    storageAction.hidden = !action;
+    storageAction.textContent = action === "resolve" ? "Voir les options" : "Réessayer";
+  },
+  hasLocal:state => !!(state.active || state.last || state.piccolo || state.history.length ||
+    state.groups.length || Object.keys(state.overrides).length),
+  revision:syncMeta?.revision ?? null,
+  dirty:syncMeta?.dirty === true,
+}) : null;
+
+function persist(snapshot) {
+  try { localStorage.setItem(storageKey, JSON.stringify(snapshot)); }
   catch { tell("Le navigateur ne peut pas sauvegarder cette partie."); }
+}
+function save() {
+  if (cloud) cloud.save();
+  else persist(data);
 }
 function go(next) {
   page = next;
@@ -541,4 +571,30 @@ document.addEventListener("submit", event => {
     }
   }
 });
-render();
+async function reloadCloud(replace = false) {
+  await cloud.load({replace});
+  go("home");
+}
+
+storageAction.addEventListener("click", () => {
+  if (storageMode !== "resolve") {
+    void reloadCloud();
+    return;
+  }
+  ask("Deux versions du carnet", "Le carnet Supabase contient des données différentes. Tu peux télécharger les données de cet appareil, puis charger la version Supabase.", "accept-cloud", "Télécharger et charger");
+});
+actions["accept-cloud"] = () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:"application/json"}));
+  const download = document.createElement("a");
+  download.href = url;
+  download.download = "carnet-whist-sauvegarde.json";
+  download.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  dialog.close();
+  void reloadCloud(true);
+};
+
+if (cloud) {
+  app.textContent = "Chargement du carnet…";
+  void cloud.load().then(render);
+} else render();
