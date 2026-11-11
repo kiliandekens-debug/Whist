@@ -219,6 +219,11 @@ input::placeholder {color:#657168}
 .board-hero {padding:12px 0 26px;border-bottom:2px solid #b3c777;overflow:hidden}
 .board-hero .wrap {max-width:1000px}
 .board-hero .back {color:var(--pale);min-height:38px}
+.board-nav {display:flex;align-items:center;justify-content:space-between;gap:10px}
+.board-cancel {min-height:44px;padding:6px 0 6px 8px;border:0;background:none;color:#f6cdb8;font-size:13px;font-weight:700;text-align:right}
+.board-cancel:hover {text-decoration:underline;text-underline-offset:4px}
+.dialog-actions .btn[data-action="confirm-cancel-game"] {background:var(--negative);border-color:var(--negative)}
+.dialog-actions .btn[data-action="confirm-cancel-game"]:hover {background:#84322a;border-color:#84322a}
 .board-top {display:flex;justify-content:space-between;align-items:end;gap:12px;margin-top:10px}
 .board-hero h1 {margin-top:7px}
 .board-emblem {display:flex;align-items:center;justify-content:center;width:143px;height:84px;flex:none;margin-right:7px}

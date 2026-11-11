@@ -241,7 +241,9 @@ function gameView(game, finished) {
   const roles = finished ? null : rolesFor(game, game.rounds.length);
   const leaders = game.players.filter((_, index) => sums[index] === Math.max(...sums));
   const heading = finished ? "Partie terminée" : "Tour " + (game.rounds.length + 1);
-  return `<section class="board-hero"><div class="wrap">${finished ? back("history", "Historique") : back("home")}<div class="board-top">
+  return `<section class="board-hero"><div class="wrap"><div class="board-nav">
+    ${finished ? back("history", "Historique") : `${back("home")}<button class="board-cancel" type="button" data-action="cancel-game">Annuler la partie</button>`}
+  </div><div class="board-top">
     <div><span class="eyebrow">${finished ? formatDate(game.finished) : "Feuille de score, " + game.players.length + " joueurs"}</span><h1>${heading}</h1></div>
     ${finished ? `<div class="board-leader">${icon("scores")}<span>${leaders.length > 1 ? "En tête ex æquo" : "En tête"}<strong>${leaders.map(escape).join(", ")}</strong></span></div>` : '<div class="board-emblem" aria-hidden="true"><span>♦</span><span>♠</span></div>'}
   </div></div></section>
@@ -407,8 +409,8 @@ dialog.addEventListener("close", () => {
   if (restoreFocus?.isConnected) restoreFocus.focus();
   restoreFocus = null;
 });
-function ask(title, copy, action, label) {
-  showDialog(`${dialogHead(title)}<div class="dialog-main"><p class="body-copy">${copy}</p></div><div class="dialog-actions"><button class="btn secondary" data-action="close">Annuler</button><button class="btn primary" data-action="${action}">${label}</button></div>`);
+function ask(title, copy, action, label, dismissLabel = "Annuler") {
+  showDialog(`${dialogHead(title)}<div class="dialog-main"><p class="body-copy">${copy}</p></div><div class="dialog-actions"><button class="btn secondary" data-action="close">${dismissLabel}</button><button class="btn primary" data-action="${action}">${label}</button></div>`);
 }
 function openScore(index = null) {
   const game = page === "archive" ? viewedGame : data.active;
@@ -675,6 +677,17 @@ const actions = {
   },
   double(value) { score.doubled = value === "1"; renderScore(); },
   "confirm-score"() { recordScore(); },
+  "cancel-game"() {
+    ask("Annuler la partie ?", "Cette partie et ses scores seront effacés.", "confirm-cancel-game", "Oui, annuler la partie", "Garder la partie");
+  },
+  "confirm-cancel-game"() {
+    if (page !== "board" || !data.active) return;
+    data.active = null;
+    save();
+    dialog.close();
+    go("home", true);
+    tell("Partie annulée.");
+  },
   finish() { ask("Terminer la partie ?", "Les scores et les donnes seront consultables dans l’historique.", "confirm-finish", "Terminer la partie"); },
   "confirm-finish"() {
     viewedGame = {...data.active, id:crypto.randomUUID(), finished:Date.now()};
