@@ -164,22 +164,25 @@ function render() {
 }
 function home() {
   const game = data.active;
-  return `<section class="hero"><div class="wrap hero-inner"><div class="hero-copy">
-    <span class="home-note">Whist à 4 ou 5</span>
-    <h1>On se fait<br>un <em>whist ?</em></h1>
-    <p>Choisis les joueurs et c’est parti.</p>
-    <div class="actions">${game
-      ? `<button class="btn primary" data-action="resume">On reprend ? ${icon("arrow")}</button><button class="btn secondary" data-action="new">Nouvelle partie</button>`
-      : `<button class="btn primary" data-action="new">Nouvelle partie ${icon("arrow")}</button>`}</div>
-    ${game ? `<p class="resume-note">Ta partie t’attend. Vous en êtes au tour ${game.rounds.length + 1}.</p>` : ""}
-  </div><div class="card-fan" aria-hidden="true"><span class="card-doodle doodle-one">✳</span><span class="card-doodle doodle-two">✦</span>
-    <div class="playing-card card-back"><span>A ♥</span><b>♥</b><span>A ♥</span></div>
-    <div class="playing-card card-front"><span>A ♣</span><b class="club-friend">♣<i></i></b><span>A ♣</span></div>
-  </div></div></section>
-  <section class="wrap home-shortcuts" aria-label="Ton carnet">
-    <a class="shortcut shortcut-players" href="/joueurs" data-action="players"><span class="shortcut-symbol" aria-hidden="true">♣</span><span><strong>Les joueurs</strong><small>${data.roster.length ? data.roster.length + " habitué" + plural(data.roster.length) + " à retrouver" : "Ajoute tes joueurs"}</small></span>${icon("arrow")}</a>
-    <a class="shortcut shortcut-history" href="/historique" data-action="history"><span class="shortcut-symbol" aria-hidden="true">♥</span><span><strong>Les parties passées</strong><small>${data.history.length ? data.history.length + " partie" + plural(data.history.length) + " au compteur" : "Retrouve tes scores"}</small></span>${icon("arrow")}</a>
-  </section>`;
+  return `<div class="wrap home-screen${game ? " has-game" : ""}">
+    <section class="hero" aria-labelledby="home-title">
+      <div class="hero-copy"><p class="home-note">Whist à 4 ou 5 joueurs</p><h1 id="home-title">On se fait<br>un <em>whist&nbsp;?</em></h1></div>
+      <div class="card-fan" aria-hidden="true">
+        <div class="playing-card card-back"><span>A ♥︎</span><b>♥︎</b><span>A ♥︎</span></div>
+        <div class="playing-card card-front"><span>A ♣︎</span><b class="club-friend">♣︎<i></i></b><span>A ♣︎</span></div>
+      </div>
+      ${game ? "" : `<button class="btn primary hero-launch" data-action="new">Nouvelle partie ${icon("arrow")}</button>`}
+    </section>
+    ${game ? `<section class="home-game surface" aria-labelledby="home-game-title">
+      <div class="home-game-heading"><h2 id="home-game-title">Partie en cours</h2><span class="home-turn">Tour ${game.rounds.length + 1}</span></div>
+      <ul class="home-game-players" aria-label="Joueurs de la partie">${game.players.map((name,seat) => `<li>${avatar(seat)}<span title="${escape(name)}">${escape(name)}</span></li>`).join("")}</ul>
+      <div class="home-game-actions"><button class="btn primary" data-action="resume">Reprendre ${icon("arrow")}</button><button class="btn secondary" data-action="new">Nouvelle partie</button></div>
+    </section>` : ""}
+    <nav class="home-shortcuts" aria-label="Ton carnet">
+      <a class="shortcut shortcut-players" href="/joueurs" data-action="players"><span class="shortcut-symbol" aria-hidden="true">♣︎</span><span><strong>Joueurs</strong><small>${data.roster.length ? data.roster.length + " joueur" + plural(data.roster.length) : "Ajouter un joueur"}</small></span>${icon("arrow")}</a>
+      <a class="shortcut shortcut-history" href="/historique" data-action="history"><span class="shortcut-symbol" aria-hidden="true">♥︎</span><span><strong>Historique</strong><small>${data.history.length ? data.history.length + " partie" + plural(data.history.length) : "Aucune partie"}</small></span>${icon("arrow")}</a>
+    </nav>
+  </div>`;
 }
 function setup() {
   const count = draft.players.length;
