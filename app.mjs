@@ -446,6 +446,17 @@ function outcomePicker(entry) {
   const name = escape(score.game.players[entry.seat]);
   return `<div class="trick-row"><p class="hint">${name}</p><div class="toggle outcome-picker" role="group" aria-label="Résultat de ${name}">${[true,false].map(won => `<button aria-pressed="${entry.won === won}" data-action="outcome" data-value="${Number(won)}" data-seat="${entry.seat}">${won ? "Gagné" : "Perdu"}</button>`).join("")}</div></div>`;
 }
+function scoreStandings(game) {
+  const ranking = totals(game).map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points);
+  return `<section class="score-standings" aria-labelledby="score-standings-title">
+    <h3 id="score-standings-title">Classement actuel</h3>
+    <ul role="list">${ranking.map(({points, seat}) => {
+      const rank = ranking.findIndex(player => player.points === points) + 1;
+      const name = escape(game.players[seat]);
+      return `<li><span class="score-standings-name" title="${name}">${name}</span><span class="score-standings-line"><span class="score-rank">${rank}<sup>${rank === 1 ? "er" : "e"}</sup></span><strong class="${color(points)}">${signed(points)}</strong></span></li>`;
+    }).join("")}</ul>
+  </section>`;
+}
 function renderScore() {
   const game = score.game;
   const contract = byId[score.contract];
@@ -460,6 +471,7 @@ function renderScore() {
   const entriesTotal = score.entries.reduce((sum, entry) => sum + (entry.tricks ?? 0), 0);
   const playerHint = contract?.multiple ? "Qui tente le coup ? Un ou deux joueurs." : contract?.players === 2 ? "Qui joue ensemble ?" : contract ? "Qui tente le coup ?" : "Choisis d’abord l’annonce";
   showDialog(`${dialogHead((score.index === null ? "Les points du tour " : "Modifier le tour ") + (index + 1))}
+    ${scoreStandings(game)}
     <div class="dialog-main score-entry">${roleStrip(game, index)}
       <div class="entry-grid">
       <fieldset><legend>Contrat</legend><div class="mode-tabs">${Object.entries(modes).map(([key, mode]) => `<button aria-pressed="${key === score.mode}" data-action="mode" data-value="${key}"><span aria-hidden="true">${mode.suit}</span>${mode.name}</button>`).join("")}</div>
