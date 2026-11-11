@@ -18,8 +18,22 @@ function normalize(snapshot) {
   if (state.active && !state.active.scoringVersion) {
     state.active = {...state.active, scoringVersion:1, overrides:state.overrides, piccolo:false};
   }
+  const gameIds = new Set(state.history.map(game => game.id).filter(Boolean));
+  state.history = state.history.map(game => {
+    if (game.id) return game;
+    const base = "partie-" + game.finished;
+    let id = base;
+    for (let suffix = 2; gameIds.has(id); suffix++) id = base + "-" + suffix;
+    gameIds.add(id);
+    return {...game,id};
+  });
   return migratePlayers(state);
 }
+const pagePaths = {
+  home:"/accueil", setup:"/nouvelle-partie", table:"/nouvelle-partie/table", board:"/partie",
+  history:"/historique", rules:"/bareme", groups:"/groupes", players:"/joueurs", statistics:"/classements",
+};
+const pagesByPath = new Map(Object.entries(pagePaths).map(([screen,path]) => [path,screen]));
 let page = "home";
 let draft = null;
 let score = null;
@@ -95,8 +109,15 @@ function save() {
   if (cloud) cloud.save();
   else persist(data);
 }
-function go(next) {
+function go(next, replace = false) {
   page = next;
+  const path = next === "archive" ? "/historique/" + encodeURIComponent(viewedGame.id)
+    : next === "profile" ? "/joueurs/" + encodeURIComponent(viewedPlayerId) : pagePaths[next];
+  const samePath = window.location.pathname === path;
+  if (!samePath || window.location.hash || next === "table") {
+    const method = replace || samePath ? "replaceState" : "pushState";
+    window.history[method](next === "table" ? {draft} : null, "", path + (replace ? window.location.search : ""));
+  }
   render();
   window.scrollTo(0, 0);
   if (!reducedMotion.matches) app.firstElementChild?.animate?.([
@@ -107,6 +128,30 @@ function go(next) {
     heading.tabIndex = -1;
     heading.focus({preventScroll:true, focusVisible:false});
   }
+}
+function openPath() {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  let next = pagesByPath.get(path) ?? "home";
+  const detail = /^\/(historique|joueurs)\/([^/]+)$/.exec(path);
+  if (detail) {
+    let id;
+    try { id = decodeURIComponent(detail[2]); } catch {}
+    if (detail[1] === "historique") {
+      viewedGame = data.history.find(game => game.id === id);
+      next = viewedGame ? "archive" : "history";
+    } else {
+      viewedPlayerId = data.roster.find(player => player.id === id)?.id;
+      next = viewedPlayerId ? "profile" : "players";
+    }
+  }
+  if (next === "board" && !data.active) next = "home";
+  if (next === "table") {
+    const placed = window.history.state?.draft;
+    if (placed && validNames(placed.players)) draft = placed;
+    if (!validNames(draft?.players)) next = "setup";
+  }
+  if (next === "setup" && !draft) draft = makeDraft();
+  go(next,true);
 }
 function render() {
   const screens = {home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
@@ -131,8 +176,8 @@ function home() {
     <div class="playing-card card-front"><span>A ♣</span><b class="club-friend">♣<i></i></b><span>A ♣</span></div>
   </div></div></section>
   <section class="wrap home-shortcuts" aria-label="Ton carnet">
-    <button class="shortcut shortcut-players" data-action="players"><span class="shortcut-symbol" aria-hidden="true">♣</span><span><strong>Les joueurs</strong><small>${data.roster.length ? data.roster.length + " habitué" + plural(data.roster.length) + " à retrouver" : "Ajoute tes joueurs"}</small></span>${icon("arrow")}</button>
-    <button class="shortcut shortcut-history" data-action="history"><span class="shortcut-symbol" aria-hidden="true">♥</span><span><strong>Les parties passées</strong><small>${data.history.length ? data.history.length + " partie" + plural(data.history.length) + " au compteur" : "Retrouve tes scores"}</small></span>${icon("arrow")}</button>
+    <a class="shortcut shortcut-players" href="/joueurs" data-action="players"><span class="shortcut-symbol" aria-hidden="true">♣</span><span><strong>Les joueurs</strong><small>${data.roster.length ? data.roster.length + " habitué" + plural(data.roster.length) + " à retrouver" : "Ajoute tes joueurs"}</small></span>${icon("arrow")}</a>
+    <a class="shortcut shortcut-history" href="/historique" data-action="history"><span class="shortcut-symbol" aria-hidden="true">♥</span><span><strong>Les parties passées</strong><small>${data.history.length ? data.history.length + " partie" + plural(data.history.length) + " au compteur" : "Retrouve tes scores"}</small></span>${icon("arrow")}</a>
   </section>`;
 }
 function setup() {
@@ -223,7 +268,7 @@ function roundTable(game, finished) {
 }
 function history() {
   return `<section class="wrap narrow page">${back("home")}${head("Historique", "Retrouve le classement et les donnes de tes parties terminées.")}
-    ${data.history.length ? `<div class="list">${data.history.map((game, index) => `<article class="list-item surface"><div><strong>${game.players.map(escape).join(", ")}</strong><small>${formatDate(game.finished)}, ${game.rounds.length} donne${plural(game.rounds.length)}</small></div><button class="btn secondary" data-action="view-game" data-value="${index}">Voir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♥", "Aucune partie terminée", "Tes parties apparaîtront ici à la fin du jeu.")}
+    ${data.history.length ? `<div class="list">${data.history.map(game => `<article class="list-item surface"><div><strong>${game.players.map(escape).join(", ")}</strong><small>${formatDate(game.finished)}, ${game.rounds.length} donne${plural(game.rounds.length)}</small></div><a class="btn secondary" href="/historique/${encodeURIComponent(game.id)}" data-action="view-game" data-value="${escape(game.id)}">Voir ${icon("arrow")}</a></article>`).join("")}</div>` : empty("♥", "Aucune partie terminée", "Tes parties apparaîtront ici à la fin du jeu.")}
   </section>`;
 }
 function groups() {
@@ -234,7 +279,7 @@ function groups() {
 }
 function playerCards(query = "") {
   const players = query.trim() ? matchingPlayers(data.roster, query) : [...data.roster].sort((a,b) => a.nickname.localeCompare(b.nickname,"fr-BE"));
-  return players.length ? `<div class="list">${players.map(player => `<article class="list-item surface"><div><strong>${escape(player.nickname)}</strong><small>${player.aliases.length ? "Avant, " + player.aliases.map(escape).join(", ") : "Joueur enregistré"}</small></div><button class="btn secondary" data-action="view-player" data-value="${escape(player.id)}">Voir la fiche ${icon("arrow")}</button></article>`).join("")}</div>`
+  return players.length ? `<div class="list">${players.map(player => `<article class="list-item surface"><div><strong>${escape(player.nickname)}</strong><small>${player.aliases.length ? "Avant, " + player.aliases.map(escape).join(", ") : "Joueur enregistré"}</small></div><a class="btn secondary" href="/joueurs/${encodeURIComponent(player.id)}" data-action="view-player" data-value="${escape(player.id)}">Voir la fiche ${icon("arrow")}</a></article>`).join("")}</div>`
     : empty("♠", "Aucun joueur", query.trim() ? "Aucun pseudo ne correspond à ta recherche." : "Ajoute ton premier joueur. Les autres suivront.");
 }
 function playersPage() {
@@ -435,9 +480,12 @@ function validNames(names) {
   return [4, 5].includes(names?.length) && names.every(name => name.trim()) &&
     new Set(names.map(name => findPlayer(data.roster,name)?.id ?? "name:" + playerKey(name))).size === names.length;
 }
-function newDraft(names = ["", "", "", ""], ids = []) {
+function makeDraft(names = ["", "", "", ""], ids = []) {
   const players = names.map((name,index) => data.roster.find(player => player.id === ids[index]) ?? findPlayer(data.roster,name));
-  draft = {players:names.map((name,index) => players[index]?.nickname ?? name),playerIds:players.map(player => player?.id ?? null), dealer:0};
+  return {players:names.map((name,index) => players[index]?.nickname ?? name),playerIds:players.map(player => player?.id ?? null), dealer:0};
+}
+function newDraft(names, ids) {
+  draft = makeDraft(names,ids);
   swap = null;
   go("setup");
 }
@@ -519,13 +567,13 @@ const actions = {
   new() { newDraft(); },
   resume() { go("board"); },
   history() { go("history"); },
-  "view-game"(value) { viewedGame = data.history[Number(value)]; go("archive"); },
+  "view-game"(id) { viewedGame = data.history.find(game => game.id === id); go("archive"); },
   rules() { if (page !== "rules") fromRules = page; go("rules"); },
   "rules-back"() { go(fromRules); },
   "reset-rules"() { ask("Rétablir le barème ?", "Les nouvelles parties utiliseront le barème par défaut.", "confirm-reset", "Rétablir"); },
   "confirm-reset"() { data.overrides = {}; data.piccolo = false; save(); dialog.close(); render(); tell("Barème rétabli."); },
   setup() { swap = null; go("setup"); },
-  dealer(value) { draft.dealer = Number(value); render(); app.querySelector('[data-action="dealer"][data-value="' + value + '"]')?.focus(); },
+  dealer(value) { draft.dealer = Number(value); window.history.replaceState({draft}, ""); render(); app.querySelector('[data-action="dealer"][data-value="' + value + '"]')?.focus(); },
   swap(value) {
     const seat = Number(value);
     if (swap === null) swap = seat;
@@ -536,6 +584,7 @@ const actions = {
       }
       swap = null;
     }
+    window.history.replaceState({draft}, "");
     render();
     app.querySelector('[data-action="swap"][data-value="' + value + '"]')?.focus();
   },
@@ -620,7 +669,7 @@ const actions = {
   "confirm-score"() { recordScore(); },
   finish() { ask("Terminer la partie ?", "Les scores et les donnes seront consultables dans l’historique.", "confirm-finish", "Terminer la partie"); },
   "confirm-finish"() {
-    viewedGame = {...data.active, finished:Date.now()};
+    viewedGame = {...data.active, id:crypto.randomUUID(), finished:Date.now()};
     data.history.unshift(viewedGame);
     data.active = null;
     save();
@@ -630,8 +679,13 @@ const actions = {
   },
 };
 document.addEventListener("click", event => {
-  const button = event.target.closest("button[data-action]");
-  if (button && !button.disabled) actions[button.dataset.action]?.(button.dataset.value, button.dataset.seat);
+  const control = event.target.closest("button[data-action],a[data-action]");
+  if (!control || control.disabled || event.defaultPrevented) return;
+  if (control.tagName === "A") {
+    if (event.button || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+    event.preventDefault();
+  }
+  actions[control.dataset.action]?.(control.dataset.value, control.dataset.seat);
 });
 
 const compactSetup = window.matchMedia("(max-width:650px)");
@@ -830,7 +884,7 @@ document.addEventListener("submit", event => {
 });
 async function reloadCloud(replace = false) {
   await cloud.load({replace});
-  go("home");
+  openPath();
 }
 
 storageAction.addEventListener("click", () => {
@@ -851,7 +905,14 @@ actions["accept-cloud"] = () => {
   void reloadCloud(true);
 };
 
+function startNavigation() {
+  openPath();
+  window.addEventListener("popstate", () => {
+    if (dialog.open) dialog.close();
+    openPath();
+  });
+}
 if (cloud) {
   app.textContent = "Chargement du carnet…";
-  void cloud.load().then(render);
-} else render();
+  void cloud.load().then(startNavigation);
+} else startNavigation();

@@ -4,6 +4,7 @@ const assetTypes = {
   ".css":"text/css; charset=utf-8",
   ".svg":"image/svg+xml",
 };
+const pagePath = /^\/(?:accueil|nouvelle-partie(?:\/table)?|partie|historique(?:\/[^/]+)?|joueurs(?:\/[^/]+)?|classements|bareme|groupes)?\/?$/;
 
 function error(code, status) {
   return Response.json({error:code}, {status, headers:{"Cache-Control":"no-store"}});
@@ -43,7 +44,7 @@ export default {
   async fetch(request, env) {
     const {pathname} = new URL(request.url);
     if (pathname === "/api/whist-state") return storage(request, env);
-    const path = pathname === "/" ? "/index.html" : pathname;
+    const path = pagePath.test(pathname) ? "/index.html" : pathname;
     if (!Object.hasOwn(assets, path)) return new Response("Introuvable", {status:404});
     if (!["GET","HEAD"].includes(request.method)) return error("method",405);
     return new Response(request.method === "HEAD" ? null : assets[path], {

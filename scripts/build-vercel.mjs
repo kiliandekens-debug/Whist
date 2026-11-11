@@ -13,7 +13,7 @@ for (const name of ["app.mjs","cloud.mjs","score.mjs","players.mjs","style.css",
   await copyFile(new URL("../" + name, import.meta.url), new URL(name, output));
 }
 let html = await readFile(new URL("../index.html", import.meta.url), "utf8");
-html = html.replace('src="app.mjs"', 'src="auth.mjs"');
+html = html.replace('src="/app.mjs"', 'src="/auth.mjs"');
 await writeFile(new URL("index.html", output), html);
 await build({
   entryPoints:["vercel/auth.mjs"],outfile:"vercel-public/auth.mjs",bundle:true,
