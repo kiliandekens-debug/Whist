@@ -13,7 +13,7 @@ app.textContent = "Connexion au carnet…";
 
 function showLogin(message = "Retrouve tes parties et tes scores sur tous tes appareils.") {
   app.innerHTML = `<section class="wrap narrow page">
-    <div class="page-head"><span class="eyebrow">Ton carnet personnel</span><h1>À toi de jouer<span>.</span></h1><p id="login-message"></p></div>
+    <div class="page-head"><h1>On se fait un whist ?</h1><p id="login-message"></p></div>
     <form id="login-form" class="surface" style="padding:clamp(20px,5vw,36px)">
       <label for="login-email">Ton adresse e-mail</label>
       <input id="login-email" type="email" autocomplete="email" inputmode="email" required maxlength="254"
@@ -22,7 +22,7 @@ function showLogin(message = "Retrouve tes parties et tes scores sur tous tes ap
       <p id="login-status" role="status" aria-live="polite" style="margin-top:20px"></p>
     </form>
     <p class="hint">Ouvre le lien dans le navigateur utilisé pour cette demande.</p>
-    ${config.preview ? '<p class="hint">Version de test · les parties encodées ici sont séparées du carnet principal.</p>' : ""}
+    ${config.preview ? '<p class="hint">Les parties jouées dans cet aperçu restent ici.</p>' : ""}
   </section>`;
   document.querySelector("#login-message").textContent = message;
   document.querySelector("#login-form").addEventListener("submit", async event => {
@@ -37,7 +37,7 @@ function showLogin(message = "Retrouve tes parties et tes scores sur tous tes ap
         options:{emailRedirectTo:location.origin + "/",shouldCreateUser:true},
       });
       status.textContent = error
-        ? "Le lien n’a pas pu être envoyé. Réessaie plus tard. L’envoi d’e-mails doit être activé pour cette adresse dans Supabase."
+        ? "Le lien n’a pas pu être envoyé. Vérifie ton adresse et réessaie dans un instant."
         : "Le lien est envoyé. Consulte ta boîte mail et tes courriers indésirables.";
     } catch {
       status.textContent = "Connexion interrompue. Réessaie quand le réseau est disponible.";

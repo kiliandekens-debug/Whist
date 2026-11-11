@@ -32,7 +32,7 @@ export function createCloudStore({read, write, report, hasLocal, revision, dirty
   async function flush() {
     if (busy || conflict || onlineRevision === null || !dirty) return;
     busy = true;
-    report("Synchronisation…");
+    report("On sauvegarde…");
     try {
       while (dirty) {
         const sent = changes;
@@ -52,9 +52,9 @@ export function createCloudStore({read, write, report, hasLocal, revision, dirty
         dirty = changes !== sent;
         mark(read());
       }
-      report("Sauvegardé dans Supabase");
+      report("Tout est sauvegardé");
     } catch {
-      report("Sauvegarde locale · connexion interrompue", "retry");
+      report("Hors connexion. Le carnet est gardé sur cet appareil.", "retry");
     } finally {
       busy = false;
     }
@@ -63,7 +63,7 @@ export function createCloudStore({read, write, report, hasLocal, revision, dirty
   async function load({replace = false} = {}) {
     if (busy) return;
     busy = true;
-    report("Synchronisation…");
+    report("On sauvegarde…");
     try {
       const response = await request(undefined, authorize);
       if (!response.ok) throw Error("Cloud read failed");
@@ -84,9 +84,9 @@ export function createCloudStore({read, write, report, hasLocal, revision, dirty
         dirty ||= hasLocal(local);
         mark(local);
       }
-      report("Sauvegarde Supabase active");
+      report("Ton carnet est à jour");
     } catch {
-      report("Sauvegarde locale · connexion interrompue", "retry");
+      report("Hors connexion. Le carnet est gardé sur cet appareil.", "retry");
       return;
     } finally {
       busy = false;

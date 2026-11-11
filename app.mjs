@@ -33,11 +33,6 @@ let fromRules = "home";
 let toastTimer;
 let restoreFocus;
 const suits = ["♠", "♥", "♣", "♦", "★"];
-const steps = [
-  {title:"Compose ta table", copy:"Place quatre ou cinq joueurs et désigne le premier donneur.", icon:"users"},
-  {title:"Encode chaque donne", copy:"Choisis le contrat et les plis. Le carnet calcule les points.", icon:"cards"},
-  {title:"Suis le classement", copy:"Consulte les scores, corrige une donne et retrouve tes parties.", icon:"scores"},
-];
 const icons = {
   plus:'<path d="M12 5v14M5 12h14"/>',
   arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',
@@ -56,7 +51,8 @@ const icon = name => '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" st
 const escape = value => String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
 const avatar = index => `<span class="avatar tone${index}" aria-hidden="true">${suits[index]}</span>`;
 const back = (action, label = "Accueil") => `<button class="back" data-action="${action}">${icon("back")}${label}</button>`;
-const head = (tag, title, desc) => `<div class="page-head"><span class="eyebrow">${tag}</span><h1>${title}</h1><p>${desc}</p></div>`;
+const head = (title, desc) => `<div class="page-head"><h1>${title}</h1><p>${desc}</p></div>`;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const signed = value => value > 0 ? "+" + value : value < 0 ? "−" + Math.abs(value) : "0";
 const color = value => value > 0 ? "pos" : value < 0 ? "neg" : "";
 const totals = game => game.rounds.reduce((values, round) => values.map((value, index) => value + round.values[index]), game.players.map(() => 0));
@@ -103,6 +99,9 @@ function go(next) {
   page = next;
   render();
   window.scrollTo(0, 0);
+  if (!reducedMotion.matches) app.firstElementChild?.animate?.([
+    {opacity:.55,transform:"translateY(7px)"}, {opacity:1,transform:"translateY(0)"},
+  ], {duration:200,easing:"ease-out"});
   const heading = app.querySelector("h1");
   if (heading) {
     heading.tabIndex = -1;
@@ -119,26 +118,26 @@ function render() {
 }
 function home() {
   const game = data.active;
-  const main = game
-    ? `<button class="btn primary" data-action="resume">Reprendre la partie ${icon("arrow")}</button><button class="btn secondary" data-action="new">${icon("plus")} Nouvelle partie</button>`
-    : `<button class="btn primary" data-action="new">${icon("plus")} Nouvelle partie</button><button class="btn secondary" data-action="history">${icon("clock")} Historique</button>`;
   return `<section class="hero"><div class="wrap hero-inner"><div class="hero-copy">
-    <div class="hero-labels"><span class="eyebrow">Whist belge</span><span class="table-badge">4 ou 5 joueurs</span></div>
-    <h1>Carnet de <em>Whist<span>.</span></em></h1>
-    <p>La feuille de score de tes soirées whist. Encode les plis, le carnet compte les points.</p>
-    <div class="actions">${main}</div>
-    ${game ? `<p class="resume-note"><span></span>Partie en cours · Tour ${game.rounds.length + 1} · ${game.players.length} joueurs</p>` : ""}
-  </div><img class="hero-art" src="cards.svg" width="620" height="520" alt=""></div></section>
-  <section class="wrap section"><div class="section-heading">
-    <div><span class="eyebrow">Autour de la table</span><h2>La partie en trois temps</h2></div>
-    <button class="text-action" data-action="players">${icon("users")} Joueurs ${icon("arrow")}</button>
-  </div>
-    <div class="steps">${steps.map((step, index) => `<article class="step"><div class="step-top"><span class="step-mark">${icon(step.icon)}</span><span class="step-number" aria-hidden="true">0${index + 1}</span></div><h3>${step.title}</h3><p>${step.copy}</p></article>`).join("")}</div>
+    <span class="home-note">Whist à 4 ou 5</span>
+    <h1>On se fait<br>un <em>whist ?</em></h1>
+    <p>Choisis les joueurs et c’est parti.</p>
+    <div class="actions">${game
+      ? `<button class="btn primary" data-action="resume">On reprend ? ${icon("arrow")}</button><button class="btn secondary" data-action="new">Nouvelle partie</button>`
+      : `<button class="btn primary" data-action="new">Nouvelle partie ${icon("arrow")}</button>`}</div>
+    ${game ? `<p class="resume-note">Ta partie t’attend. Vous en êtes au tour ${game.rounds.length + 1}.</p>` : ""}
+  </div><div class="card-fan" aria-hidden="true"><span class="card-doodle doodle-one">✳</span><span class="card-doodle doodle-two">✦</span>
+    <div class="playing-card card-back"><span>A ♥</span><b>♥</b><span>A ♥</span></div>
+    <div class="playing-card card-front"><span>A ♣</span><b class="club-friend">♣<i></i></b><span>A ♣</span></div>
+  </div></div></section>
+  <section class="wrap home-shortcuts" aria-label="Ton carnet">
+    <button class="shortcut shortcut-players" data-action="players"><span class="shortcut-symbol" aria-hidden="true">♣</span><span><strong>Les joueurs</strong><small>${data.roster.length ? data.roster.length + " habitué" + plural(data.roster.length) + " à retrouver" : "Ajoute tes joueurs"}</small></span>${icon("arrow")}</button>
+    <button class="shortcut shortcut-history" data-action="history"><span class="shortcut-symbol" aria-hidden="true">♥</span><span><strong>Les parties passées</strong><small>${data.history.length ? data.history.length + " partie" + plural(data.history.length) + " au compteur" : "Retrouve tes scores"}</small></span>${icon("arrow")}</button>
   </section>`;
 }
 function setup() {
   const count = draft.players.length;
-  return `<section class="wrap narrow page setup-page">${back("home")}${head("Nouvelle partie · 1 sur 2", "Qui joue ?", "Choisis le nombre de joueurs, puis saisis leurs prénoms.")}
+  return `<section class="wrap narrow page setup-page">${back("home")}${head("Qui joue ?", "Un prénom ou un pseudo pour chacun.")}
     <form id="setup-form">
       <fieldset class="player-count"><legend>Nombre de joueurs</legend><div class="count-options">
         ${[4, 5].map(size => `<label><input type="radio" name="size" value="${size}" ${count === size ? "checked" : ""}><span>${size} joueurs</span></label>`).join("")}
@@ -151,14 +150,14 @@ function setup() {
           enterkeyhint="${index < count - 1 ? "next" : "go"}" required value="${escape(name)}"></label>
         <div class="player-suggestions" role="listbox" aria-label="Joueurs proposés" id="player-suggestions-${index}" hidden></div>
       </div>`).join("")}</div>
-      <p class="hint">Tape le début d’un pseudo pour retrouver un joueur. Les nouveaux pseudos sont enregistrés au lancement de la partie.</p>
+      <p class="hint">Déjà venu ? Tape le début de son pseudo. Les nouveaux joueurs sont ajoutés au départ.</p>
       <p class="error" id="setup-error" hidden>Choisis un joueur différent à chaque place, y compris pour les anciens pseudos.</p>
       <div class="page-actions"><button class="quiet" type="button" data-action="groups">${icon("users")} Groupes de joueurs</button><button class="btn primary" type="submit">Placer les joueurs ${icon("arrow")}</button></div>
     </form></section>`;
 }
 function table() {
   const {dealer, dead, first} = rolesFor(draft);
-  return `<section class="wrap narrow page">${back("setup", "Prénoms")}${head("Nouvelle partie · 2 sur 2", "À table", "Place les joueurs dans le sens horaire, puis désigne le premier donneur.")}
+  return `<section class="wrap narrow page">${back("setup", "Prénoms")}${head("À table", "Mets les joueurs dans l’ordre et choisis qui distribue.")}
     <div class="table-felt" data-player-count="${draft.players.length}">${draft.players.map((name, index) => `<article class="seat ${index === dealer ? "is-dealer" : ""} ${index === dead ? "is-dead" : ""} ${swap === index ? "is-swapping" : ""}">
       ${avatar(index)}<strong>${escape(name)}</strong><small>${index === dealer ? "Donneur" : index === dead ? "Mort" : index === first ? "Parle en premier" : "Place " + (index + 1)}</small>
       <div class="seat-controls"><button aria-label="${escape(name)} comme donneur" aria-pressed="${index === dealer}" data-action="dealer" data-value="${index}">${icon("dealer")}</button><button aria-label="Échanger la place de ${escape(name)}" aria-pressed="${swap === index}" data-action="swap" data-value="${index}">${icon("swap")}</button></div>
@@ -194,14 +193,14 @@ function gameView(game, finished) {
   const leaders = game.players.filter((_, index) => sums[index] === Math.max(...sums));
   const heading = finished ? "Partie terminée" : "Tour " + (game.rounds.length + 1);
   return `<section class="board-hero"><div class="wrap">${finished ? back("history", "Historique") : back("home")}<div class="board-top">
-    <div><span class="eyebrow">${finished ? formatDate(game.finished) : "Feuille de score · " + game.players.length + " joueurs"}</span><h1>${heading}</h1></div>
+    <div><span class="eyebrow">${finished ? formatDate(game.finished) : "Feuille de score, " + game.players.length + " joueurs"}</span><h1>${heading}</h1></div>
     ${finished ? `<div class="board-leader">${icon("scores")}<span>${leaders.length > 1 ? "En tête ex æquo" : "En tête"}<strong>${leaders.map(escape).join(", ")}</strong></span></div>` : '<div class="board-emblem" aria-hidden="true"><span>♦</span><span>♠</span></div>'}
   </div></div></section>
   <section class="wrap board-body" data-player-count="${game.players.length}">
     <div class="round-heading score-heading"><h2>Scores cumulés</h2><small>Points</small></div>
     <div class="score-tiles">${game.players.map((name, seat) => scoreTile(name, seat, sums[seat], roles)).join("")}</div>
     <div class="round-heading"><h2>Donnes</h2><small>${game.rounds.length} au total</small></div>
-    ${game.rounds.length ? roundTable(game, finished) : empty("♣", "Aucun score pour le moment", "Jouez la première donne puis ajoutez son score.")}
+    ${game.rounds.length ? roundTable(game, finished) : empty("♣", "À vous de jouer !", "Après la première donne, ajoute le score ici.")}
     ${finished ? "" : `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${game.rounds.length ? "" : "disabled"}>Terminer la partie</button></div>`}
   </section>`;
 }
@@ -213,33 +212,33 @@ function roundTable(game, finished) {
       const name = escape(game.players[entry.seat]);
       if (byId[round.contract].outcomeOnly) {
         const won = declarationWon(byId[round.contract], entry, round.entries.length === 2 ? entry.tricks : round.tricks);
-        return name + " · " + (won ? "Gagné" : "Perdu");
+        return name + ", " + (won ? "Gagné" : "Perdu");
       }
       return round.tricks === null ? name + " (" + entry.tricks + ")" : name;
     }).join(" / ");
-    const result = byId[round.contract].outcomeOnly || round.tricks === null ? played : played + " · " + round.tricks + " pli" + plural(round.tricks);
-    const info = `${escape(byId[round.contract].label)}${round.doubled ? " ×2" : ""}<small>Tour ${index + 1} · ${result}</small>`;
+    const result = byId[round.contract].outcomeOnly || round.tricks === null ? played : played + ", " + round.tricks + " pli" + plural(round.tricks);
+    const info = `${escape(byId[round.contract].label)}${round.doubled ? " ×2" : ""}<small>Tour ${index + 1}, ${result}</small>`;
     return `<tr><td>${finished ? info : `<button data-action="edit-score" data-value="${index}" title="Modifier le tour ${index + 1}">${info}</button>`}</td>${round.values.map((value, seat) => `<td class="${seat === dead ? "dead-cell" : color(value)}">${signed(value)}${seat === dead ? "<small>Mort</small>" : ""}</td>`).join("")}</tr>`;
   }).join("")}</tbody></table></div>`;
 }
 function history() {
-  return `<section class="wrap narrow page">${back("home")}${head("Carnet de parties", "Historique", "Retrouve le classement et les donnes de tes parties terminées.")}
-    ${data.history.length ? `<div class="list">${data.history.map((game, index) => `<article class="list-item surface"><div><strong>${game.players.map(escape).join(" · ")}</strong><small>${formatDate(game.finished)} · ${game.rounds.length} donne${plural(game.rounds.length)}</small></div><button class="btn secondary" data-action="view-game" data-value="${index}">Voir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♥", "Aucune partie terminée", "Tes parties apparaîtront ici à la fin du jeu.")}
+  return `<section class="wrap narrow page">${back("home")}${head("Historique", "Retrouve le classement et les donnes de tes parties terminées.")}
+    ${data.history.length ? `<div class="list">${data.history.map((game, index) => `<article class="list-item surface"><div><strong>${game.players.map(escape).join(", ")}</strong><small>${formatDate(game.finished)}, ${game.rounds.length} donne${plural(game.rounds.length)}</small></div><button class="btn secondary" data-action="view-game" data-value="${index}">Voir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♥", "Aucune partie terminée", "Tes parties apparaîtront ici à la fin du jeu.")}
   </section>`;
 }
 function groups() {
-  return `<section class="wrap narrow page">${draft ? back("setup", "Prénoms") : back("home")}${head("Les habitués", "Groupes de joueurs", "Retrouve tes tables habituelles sans ressaisir les noms.")}
-    ${data.groups.length ? `<div class="list">${data.groups.map((group, index) => `<article class="list-item surface"><div><strong>${escape(group.name)}</strong><small>${group.players.map(escape).join(" · ")}</small></div><button class="btn secondary" data-action="use-group" data-value="${index}">Choisir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♦", "Aucun groupe enregistré", "Tu peux enregistrer les joueurs que tu viens de saisir ou ceux de ta dernière partie.")}
+  return `<section class="wrap narrow page">${draft ? back("setup", "Prénoms") : back("home")}${head("Groupes de joueurs", "Retrouve tes tables habituelles sans ressaisir les noms.")}
+    ${data.groups.length ? `<div class="list">${data.groups.map((group, index) => `<article class="list-item surface"><div><strong>${escape(group.name)}</strong><small>${group.players.map(escape).join(", ")}</small></div><button class="btn secondary" data-action="use-group" data-value="${index}">Choisir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♦", "Aucun groupe enregistré", "Tu peux enregistrer les joueurs que tu viens de saisir ou ceux de ta dernière partie.")}
     <div class="page-actions">${data.last ? `<button class="btn secondary" data-action="last-group">Reprendre les derniers joueurs</button>` : ""}<button class="btn primary" data-action="save-group" ${validNames(draft?.players) || data.last ? "" : "disabled"}>Enregistrer un groupe</button></div>
   </section>`;
 }
 function playerCards(query = "") {
   const players = query.trim() ? matchingPlayers(data.roster, query) : [...data.roster].sort((a,b) => a.nickname.localeCompare(b.nickname,"fr-BE"));
-  return players.length ? `<div class="list">${players.map(player => `<article class="list-item surface"><div><strong>${escape(player.nickname)}</strong><small>${player.aliases.length ? "Anciens pseudos · " + player.aliases.map(escape).join(" · ") : "Joueur enregistré"}</small></div><button class="btn secondary" data-action="view-player" data-value="${escape(player.id)}">Voir la fiche ${icon("arrow")}</button></article>`).join("")}</div>`
-    : empty("♠", "Aucun joueur", query.trim() ? "Aucun pseudo ne correspond à ta recherche." : "Ajoute un joueur ou commence une partie pour créer ton répertoire.");
+  return players.length ? `<div class="list">${players.map(player => `<article class="list-item surface"><div><strong>${escape(player.nickname)}</strong><small>${player.aliases.length ? "Avant, " + player.aliases.map(escape).join(", ") : "Joueur enregistré"}</small></div><button class="btn secondary" data-action="view-player" data-value="${escape(player.id)}">Voir la fiche ${icon("arrow")}</button></article>`).join("")}</div>`
+    : empty("♠", "Aucun joueur", query.trim() ? "Aucun pseudo ne correspond à ta recherche." : "Ajoute ton premier joueur. Les autres suivront.");
 }
 function playersPage() {
-  return `<section class="wrap narrow page">${back("home")}${head("Le répertoire de la table", "Joueurs", "Un pseudo, une fiche, toutes ses parties. Retrouve tes joueurs dès les premières lettres.")}
+  return `<section class="wrap narrow page">${back("home")}${head("Joueurs", "Les habitués et ceux qui viennent pour la première fois.")}
     <div class="page-actions roster-actions"><button class="btn primary" data-action="new-player">${icon("plus")} Ajouter un joueur</button><button class="btn secondary" data-action="statistics">${icon("scores")} Classements</button><button class="btn secondary" data-action="groups">${icon("users")} Groupes</button></div>
     ${data.roster.length ? '<button class="quiet roster-delete" data-action="clear-players">Vider le répertoire</button>' : ""}
     <label class="roster-search">Rechercher un pseudo<input id="roster-search" type="search" autocomplete="off" placeholder="Ex. KDE" maxlength="24"></label>
@@ -251,12 +250,12 @@ function playerProfile() {
   const player = data.roster.find(item => item.id === viewedPlayerId);
   const stats = playerStatistics(data,player.id);
   const records = Object.entries(stats.contracts);
-  return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Fiche joueur",escape(player.nickname),"Les contrats annoncés par ce joueur, avec leur résultat et les points obtenus.")}
+  return `<section class="wrap narrow page">${back("players","Joueurs")}${head(escape(player.nickname),"Ses contrats, ses points et son taux de réussite.")}
     <div class="page-actions roster-actions"><button class="btn secondary" data-action="edit-player" data-value="${escape(player.id)}">Modifier le pseudo</button><button class="btn secondary" data-action="statistics">${icon("scores")} Classements</button><button class="quiet roster-delete" data-action="delete-player" data-value="${escape(player.id)}">Supprimer le joueur</button></div>
-    ${player.aliases.length ? `<p class="hint">Anciens pseudos · ${player.aliases.map(escape).join(" · ")}</p>` : ""}
+    ${player.aliases.length ? `<p class="hint">Avant, ${player.aliases.map(escape).join(", ")}</p>` : ""}
     <div class="player-metrics"><article class="surface"><strong>${stats.completedGames}</strong><span>Parties terminées</span></article><article class="surface"><strong>${stats.roundsPlayed}</strong><span>Donnes jouées</span></article><article class="surface"><strong>${records.reduce((total,[,record]) => total + record.attempts,0)}</strong><span>Contrats annoncés</span></article></div>
     <p class="hint">Les donnes de la partie en cours sont incluses. Les donnes où le joueur est mort sont exclues.</p>
-    ${records.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Résultats par contrat"><thead><tr><th>Contrat</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th><th>Points</th></tr></thead><tbody>${records.map(([id,record]) => `<tr><th scope="row">${escape(byId[id].label)}<small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td><td class="${color(record.points)}">${signed(record.points)}</td></tr>`).join("")}</tbody></table></div>` : empty("♠","Les statistiques commencent à la table","Ses résultats apparaîtront après son premier contrat annoncé.")}
+    ${records.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Résultats par contrat"><thead><tr><th>Contrat</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th><th>Points</th></tr></thead><tbody>${records.map(([id,record]) => `<tr><th scope="row">${escape(byId[id].label)}<small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td><td class="${color(record.points)}">${signed(record.points)}</td></tr>`).join("")}</tbody></table></div>` : empty("♠","Aucun contrat joué","Ses résultats apparaîtront après sa première annonce.")}
   </section>`;
 }
 function statisticsPage() {
@@ -265,16 +264,16 @@ function statisticsPage() {
       const value = record => statsOrder === "rate" ? record.wins / record.attempts : record[statsOrder];
       return value(b.record) - value(a.record) || b.record.attempts - a.record.attempts || a.player.nickname.localeCompare(b.player.nickname,"fr-BE");
     });
-  return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Les résultats de la table","Classements","Compare les contrats remportés, les contrats perdus et les taux de réussite.")}
+  return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Classements","Qui réussit ses misères ? Qui rate ses trous ?")}
     <div class="stats-filters"><label>Contrat<select id="stats-contract">${contracts.map(contract => `<option value="${contract.id}" ${statsContract === contract.id ? "selected" : ""}>${escape(contract.label)}</option>`).join("")}</select></label>
     <label>Classer par<select id="stats-order">${[["wins","Plus de contrats gagnés"],["losses","Plus de contrats perdus"],["rate","Meilleur taux de réussite"]].map(([value,label]) => `<option value="${value}" ${statsOrder === value ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
     <p class="hint">Le taux de réussite porte uniquement sur les annonces de chaque joueur. Le nombre de tentatives permet de comparer leur expérience.</p>
-    ${ranking.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Classement par contrat"><thead><tr><th>Joueur</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th></tr></thead><tbody>${ranking.map(({player,record}) => `<tr><th scope="row"><button class="text-action" data-action="view-player" data-value="${escape(player.id)}">${escape(player.nickname)}</button><small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td></tr>`).join("")}</tbody></table></div>` : empty("♣","Aucune annonce pour ce contrat","Le classement apparaîtra après les premières annonces enregistrées.")}
+    ${ranking.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Classement par contrat"><thead><tr><th>Joueur</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th></tr></thead><tbody>${ranking.map(({player,record}) => `<tr><th scope="row"><button class="text-action" data-action="view-player" data-value="${escape(player.id)}">${escape(player.nickname)}</button><small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td></tr>`).join("")}</tbody></table></div>` : empty("♣","Aucune annonce pour ce contrat","Personne n’a encore tenté ce contrat.")}
   </section>`;
 }
 function editPlayer(id = "") {
   const player = data.roster.find(item => item.id === id);
-  showDialog(`${dialogHead("Fiche joueur", player ? "Modifier le pseudo" : "Nouveau joueur")}<form id="player-form">
+  showDialog(`${dialogHead(player ? "Modifier le pseudo" : "Nouveau joueur")}<form id="player-form">
     <div class="dialog-main"><input type="hidden" name="playerId" value="${escape(id)}"><label>Pseudo<input name="nickname" required maxlength="24" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Ex. KDE" value="${escape(player?.nickname ?? "")}"></label>
     <p class="hint">${player ? "Ses parties restent reliées à sa fiche. Son ancien pseudo permettra aussi de le retrouver." : "Le joueur pourra être sélectionné dans tes prochaines parties."}</p><p class="error" role="alert" hidden>Ce pseudo est déjà utilisé par un autre joueur.</p></div>
     <div class="dialog-actions"><button type="button" class="btn secondary" data-action="close">Annuler</button><button type="submit" class="btn primary">Enregistrer</button></div></form>`);
@@ -292,7 +291,7 @@ function updateSuggestions(input) {
   const list = app.querySelector("#player-suggestions-" + index);
   const selected = new Set(draftPlayerIds().filter((_,seat) => seat !== index));
   const matches = matchingPlayers(data.roster,input.value).filter(player => !selected.has(player.id) && playerKey(player.nickname) !== playerKey(input.value)).slice(0,6);
-  list.innerHTML = matches.map(player => `<button type="button" role="option" aria-selected="false" data-action="select-player" data-value="${escape(player.id)}" data-seat="${index}"><strong>${escape(player.nickname)}</strong>${player.aliases.length ? `<small>${player.aliases.map(escape).join(" · ")}</small>` : ""}</button>`).join("");
+  list.innerHTML = matches.map(player => `<button type="button" role="option" aria-selected="false" data-action="select-player" data-value="${escape(player.id)}" data-seat="${index}"><strong>${escape(player.nickname)}</strong>${player.aliases.length ? `<small>${player.aliases.map(escape).join(", ")}</small>` : ""}</button>`).join("");
   list.hidden = !matches.length;
   input.setAttribute("aria-expanded",String(!!matches.length));
 }
@@ -306,25 +305,25 @@ function ruleRow(contract) {
   const {label, target, bonus, id} = contract;
   const sharedBase = bonus != null && ruleValue(contract, "win") === ruleValue(contract, "loss");
   const sharedStep = bonus != null && ruleValue(contract, "bonus") === ruleValue(contract, "penalty");
-  const base = ruleInput([contract], sharedBase ? ["win","loss"] : ["win"], sharedBase ? "±" : "+", label + " · Points");
-  const loss = sharedBase ? "" : ruleInput([contract], ["loss"], "−", label + " · Perdu");
+  const base = ruleInput([contract], sharedBase ? ["win","loss"] : ["win"], sharedBase ? "±" : "+", label + ", Points");
+  const loss = sharedBase ? "" : ruleInput([contract], ["loss"], "−", label + ", Perdu");
   let step = "";
-  if (sharedStep) step = ruleInput([contract], ["bonus","penalty"], "±", label + " · Par pli");
+  if (sharedStep) step = ruleInput([contract], ["bonus","penalty"], "±", label + ", Par pli");
   else if (bonus != null) {
-    step = ruleInput([contract], ["bonus"], "+", label + " · Pli en plus") +
-      ruleInput([contract], ["penalty"], "−", label + " · Pli manquant");
+    step = ruleInput([contract], ["bonus"], "+", label + ", Pli en plus") +
+      ruleInput([contract], ["penalty"], "−", label + ", Pli manquant");
   }
   const goal = target === 0 ? "Pas de pli" : target + " pli" + plural(target);
   return `<tr class="${id === "piccolo" ? "piccolo-row" : ""}"><th scope="row">${label}<small>${goal}</small></th><td>${base}</td><td>${step}</td><td>${loss}</td></tr>`;
 }
 function capotRow(label, items) {
-  return `<tr><th scope="row">${label}<small>13 plis</small></th><td>${ruleInput(items, ["capot"], "+", label + " · Points")}</td><td></td><td></td></tr>`;
+  return `<tr><th scope="row">${label}<small>13 plis</small></th><td>${ruleInput(items, ["capot"], "+", label + ", Points")}</td><td></td><td></td></tr>`;
 }
 function rules() {
   const duos = contracts.filter(contract => contract.mode === "duo");
   const duoCapots = duos.every(contract => ruleValue(contract, "capot") === ruleValue(duos[0], "capot"))
     ? capotRow("Capot", duos)
-    : duos.map(contract => capotRow("Capot · " + contract.label, [contract])).join("");
+    : duos.map(contract => capotRow("Capot, " + contract.label, [contract])).join("");
   const groups = [
     duos.map(ruleRow).join("") + duoCapots,
     contracts.filter(contract => contract.mode === "solo").map(ruleRow).join("") +
@@ -332,7 +331,7 @@ function rules() {
       [byId.small, byId.solo8small, byId.piccolo].map(ruleRow).join(""),
     [byId.ab9, byId.ab10, byId.ab11, byId.large, byId.largetrou, byId.smallslam, byId.slam].map(ruleRow).join(""),
   ];
-  return `<section class="wrap narrow page">${back("rules-back", "Retour")}${head("Règles de la table", "Barème", "Modifie la grille de points pour tes prochaines parties.")}
+  return `<section class="wrap narrow page">${back("rules-back", "Retour")}${head("Barème", "Modifie la grille de points pour tes prochaines parties.")}
     <form class="rule-list" id="rules-form">
     <div class="rule-option surface">
       <label for="piccolo"><strong>Piccolo</strong><small>Contrat à exactement un pli.</small></label>
@@ -351,15 +350,15 @@ function showDialog(html) {
   dialog.innerHTML = html;
   if (!dialog.open) dialog.showModal();
 }
-function dialogHead(tag, title) {
-  return `<header class="dialog-head"><div><span class="eyebrow">${tag}</span><h2 id="dialog-title">${title}</h2></div><button class="dialog-close" data-action="close" aria-label="Fermer">×</button></header>`;
+function dialogHead(title) {
+  return `<header class="dialog-head"><div><h2 id="dialog-title">${title}</h2></div><button class="dialog-close" data-action="close" aria-label="Fermer">×</button></header>`;
 }
 dialog.addEventListener("close", () => {
   if (restoreFocus?.isConnected) restoreFocus.focus();
   restoreFocus = null;
 });
 function ask(title, copy, action, label) {
-  showDialog(`${dialogHead("Confirmation", title)}<div class="dialog-main"><p class="body-copy">${copy}</p></div><div class="dialog-actions"><button class="btn secondary" data-action="close">Annuler</button><button class="btn primary" data-action="${action}">${label}</button></div>`);
+  showDialog(`${dialogHead(title)}<div class="dialog-main"><p class="body-copy">${copy}</p></div><div class="dialog-actions"><button class="btn secondary" data-action="close">Annuler</button><button class="btn primary" data-action="${action}">${label}</button></div>`);
 }
 function openScore(index = null) {
   const round = index === null ? null : data.active.rounds[index];
@@ -404,16 +403,16 @@ function renderScore() {
   const scroll = dialog.scrollTop;
   const max = contract?.id === "small" ? 12 : 13;
   const entriesTotal = score.entries.reduce((sum, entry) => sum + (entry.tricks ?? 0), 0);
-  const playerHint = contract?.multiple ? "Un ou deux déclarants" : contract?.players === 2 ? "Deux partenaires" : contract ? "Un déclarant" : "Choisis d’abord le contrat";
-  showDialog(`${dialogHead("Encodage de la donne", "Score du tour " + (index + 1))}
+  const playerHint = contract?.multiple ? "Qui tente le coup ? Un ou deux joueurs." : contract?.players === 2 ? "Qui joue ensemble ?" : contract ? "Qui tente le coup ?" : "Choisis d’abord l’annonce";
+  showDialog(`${dialogHead("Les points du tour " + (index + 1))}
     <div class="dialog-main score-entry">${roleStrip(game, index)}
       <div class="entry-grid">
-      <fieldset><legend><span aria-hidden="true">01</span> Contrat</legend><div class="mode-tabs">${Object.entries(modes).map(([key, mode]) => `<button aria-pressed="${key === score.mode}" data-action="mode" data-value="${key}"><span aria-hidden="true">${mode.suit}</span>${mode.name}</button>`).join("")}</div>
+      <fieldset><legend>Contrat</legend><div class="mode-tabs">${Object.entries(modes).map(([key, mode]) => `<button aria-pressed="${key === score.mode}" data-action="mode" data-value="${key}"><span aria-hidden="true">${mode.suit}</span>${mode.name}</button>`).join("")}</div>
       <div class="chips" data-mode="${score.mode}">${contracts.filter(item => item.mode === score.mode && (item.id !== "piccolo" || game.piccolo)).map(item => `<button aria-pressed="${item.id === score.contract}" data-action="contract" data-value="${item.id}">${item.label}</button>`).join("")}</div></fieldset>
-      <fieldset><legend><span aria-hidden="true">02</span> Joueurs actifs</legend><p class="hint player-hint">${playerHint}</p><div class="pick-players">
+      <fieldset><legend>Qui joue ?</legend><p class="hint player-hint">${playerHint}</p><div class="pick-players">
       ${game.players.map((name, seat) => seat === dead ? "" : `<button ${contract ? "" : "disabled"} aria-label="${escape(name)}" aria-pressed="${score.entries.some(entry => entry.seat === seat)}" data-action="player" data-value="${seat}">${avatar(seat)}<span class="pick-name">${escape(name)}</span></button>`).join("")}</div></fieldset>
       </div>
-      ${contract ? `<fieldset><legend><span aria-hidden="true">03</span> ${contract.outcomeOnly ? "Résultat du contrat" : "Plis gagnés"}</legend>${contract.outcomeOnly
+      ${contract ? `<fieldset><legend>${contract.outcomeOnly ? "Résultat du contrat" : "Plis gagnés"}</legend>${contract.outcomeOnly
         ? (score.entries.length ? score.entries.map(outcomePicker).join("") : '<p class="hint">Sélectionne le ou les déclarants pour encoder leur résultat.</p>') : individual
         ? score.entries.map(entry => `<div class="trick-row"><p class="hint">${escape(game.players[entry.seat])}</p>${trickPicker(entry.tricks,max,0,entry.seat)}</div>`).join("")
         : trickPicker(score.tricks,max,contract.target)}
@@ -455,9 +454,42 @@ function changePlayer(seat) {
     score.entries.push({seat, tricks:null});
   }
 }
+function animateScoreChanges(before, after) {
+  if (reducedMotion.matches || !window.requestAnimationFrame) return;
+  app.querySelectorAll(".tile-score").forEach((label, seat) => {
+    if (before[seat] === after[seat]) return;
+    label.animate?.([{transform:"scale(1)"},{transform:"scale(1.13)",offset:.45},{transform:"scale(1)"}],
+      {duration:380,easing:"ease-out"});
+    const start = performance.now();
+    function tick(now) {
+      if (!label.isConnected) return;
+      const progress = Math.min(1, (now - start) / 360);
+      label.textContent = signed(Math.round(before[seat] + (after[seat] - before[seat]) * progress));
+      if (progress < 1) window.requestAnimationFrame(tick);
+    }
+    window.requestAnimationFrame(tick);
+  });
+}
+function celebrateGame() {
+  if (reducedMotion.matches) return;
+  const burst = document.createElement("div");
+  burst.className = "suit-burst";
+  burst.setAttribute("aria-hidden", "true");
+  for (let index = 0; index < 15; index++) {
+    const piece = document.createElement("span");
+    piece.textContent = suits[index % 4];
+    piece.style.setProperty("--left", 8 + index * 6 + "%");
+    piece.style.setProperty("--delay", (index % 5) * 45 + "ms");
+    piece.style.setProperty("--spin", (index % 2 ? -1 : 1) * (55 + index * 12) + "deg");
+    burst.append(piece);
+  }
+  document.body.append(burst);
+  setTimeout(() => burst.remove(), 1600);
+}
 function recordScore() {
   const values = scoreValues();
   if (!values) return;
+  const before = totals(data.active);
   const {index, contract, entries, tricks, doubled} = score;
   const rules = {...(score.rules ?? data.active.overrides[contract])};
   const round = {contract, entries, tricks:byId[contract].target === 0 && entries.length === 2 ? null : tricks, doubled, rules, values};
@@ -466,10 +498,11 @@ function recordScore() {
   save();
   dialog.close();
   render();
+  animateScoreChanges(before, totals(data.active));
   const button = app.querySelector(index === null ? '[data-action="add-score"]' : '[data-action="edit-score"][data-value="' + index + '"]');
   button?.focus({preventScroll:true});
   if (index === null) button?.scrollIntoView({block:"nearest"});
-  tell(index === null ? "Score enregistré." : "Donne corrigée.");
+  tell(index === null ? "C’est noté !" : "Voilà, c’est corrigé.");
 }
 function launchGame() {
   const playerIds = draftPlayerIds().map((id,index) => id ?? registerPlayer(data.roster,draft.players[index]).id);
@@ -556,7 +589,7 @@ const actions = {
   "use-group"(value) { const group = data.groups[Number(value)]; newDraft(group.players,group.playerIds); },
   "last-group"() { newDraft(data.last,data.lastPlayerIds); },
   "save-group"() {
-    showDialog(`${dialogHead("Groupes de joueurs", "Enregistrer un groupe")}<form id="group-form">
+    showDialog(`${dialogHead("Enregistrer un groupe")}<form id="group-form">
       <div class="dialog-main"><label>Nom du groupe<input name="group" required maxlength="32" autofocus placeholder="Ex. La table du vendredi"></label><p class="error" hidden>Choisis un nom de groupe différent.</p></div>
       <div class="dialog-actions"><button class="btn secondary" data-action="close" type="button">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form>`);
   },
@@ -593,6 +626,7 @@ const actions = {
     save();
     dialog.close();
     go("archive");
+    celebrateGame();
   },
 };
 document.addEventListener("click", event => {
@@ -797,7 +831,7 @@ storageAction.addEventListener("click", () => {
     void reloadCloud();
     return;
   }
-  ask("Deux versions du carnet", "Le carnet Supabase contient des données différentes. Tu peux télécharger les données de cet appareil, puis charger la version Supabase.", "accept-cloud", "Télécharger et charger");
+  ask("Deux versions du carnet", "Une autre version a été enregistrée sur un autre appareil. Télécharge ta copie avant de charger celle qui a été sauvegardée en ligne.", "accept-cloud", "Télécharger et charger");
 });
 actions["accept-cloud"] = () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:"application/json"}));
