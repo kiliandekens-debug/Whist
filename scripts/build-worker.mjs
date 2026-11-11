@@ -1,9 +1,9 @@
 import {mkdir, readFile, writeFile} from "node:fs/promises";
 
-const assetFiles = ["index.html", "app.mjs", "score.mjs", "players.mjs", "cloud.mjs", "style.css", "icon.svg", "cards.svg"];
+const assetFiles = ["index.html", "app.mjs", "score.mjs", "players.mjs", "cloud.mjs", "style.css", "icon.svg", "cards.svg", "apple-touch-icon.png"];
 const source = new URL("../" + (process.argv[2] ?? "dist/"), import.meta.url);
 const entries = await Promise.all(assetFiles.map(async path => {
-  let content = await readFile(new URL(path, source), "utf8");
+  let content = await readFile(new URL(path, source), path.endsWith(".png") ? "base64" : "utf8");
   if (path === "index.html") content = content.replace("<body>", '<body data-storage="supabase">');
   return ["/" + path, content];
 }));

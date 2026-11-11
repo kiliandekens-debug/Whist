@@ -3,6 +3,7 @@ const assetTypes = {
   ".mjs":"text/javascript; charset=utf-8",
   ".css":"text/css; charset=utf-8",
   ".svg":"image/svg+xml",
+  ".png":"image/png",
 };
 const pagePath = /^\/(?:accueil|nouvelle-partie(?:\/table)?|partie|historique(?:\/[^/]+)?|joueurs(?:\/[^/]+)?|classements|bareme|groupes)?\/?$/;
 
@@ -48,9 +49,12 @@ export default {
     const path = pagePath.test(pathname) ? "/index.html" : pathname;
     if (!Object.hasOwn(assets, path)) return new Response("Introuvable", {status:404});
     if (!["GET","HEAD"].includes(request.method)) return error("method",405);
-    return new Response(request.method === "HEAD" ? null : assets[path], {
+    const extension = path.slice(path.lastIndexOf("."));
+    let body = request.method === "HEAD" ? null : assets[path];
+    if (body !== null && extension === ".png") body = Uint8Array.from(atob(body), byte => byte.charCodeAt(0));
+    return new Response(body, {
       headers: {
-        "Content-Type":assetTypes[path.slice(path.lastIndexOf("."))],
+        "Content-Type":assetTypes[extension],
         "Cache-Control":"no-cache",
         "X-Content-Type-Options":"nosniff",
       },
