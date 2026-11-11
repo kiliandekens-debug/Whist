@@ -28,9 +28,10 @@ async function storage(request, env) {
         "Content-Type":"application/json",
       },
       body: request.method === "PUT" ? request.body : undefined,
-      redirect:"error",
+      redirect:"manual",
       signal:AbortSignal.timeout(5000),
     });
+    if (response.status >= 300 && response.status < 400) return error("unavailable",503);
     return new Response(response.body, {
       status:response.status,
       headers:{"Content-Type":"application/json","Cache-Control":"no-store"},
