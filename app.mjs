@@ -71,6 +71,8 @@ const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const signed = value => value > 0 ? "+" + value : value < 0 ? "−" + Math.abs(value) : "0";
 const color = value => value > 0 ? "pos" : value < 0 ? "neg" : "";
 const totals = game => game.rounds.reduce((values, round) => values.map((value, index) => value + round.values[index]), game.players.map(() => 0));
+const ranksFor = scores => scores.map(points => 1 + scores.filter(other => other > points).length);
+const ordinal = rank => `${rank}<sup>${rank === 1 ? "er" : "e"}</sup>`;
 const plural = n => n > 1 ? "s" : "";
 const formatDate = value => new Intl.DateTimeFormat("fr-BE", {dateStyle:"medium", timeStyle:"short"}).format(new Date(value));
 const empty = (suit, title, copy) => `<div class="empty surface"><span class="step-mark" aria-hidden="true">${suit}</span><strong>${title}</strong><p>${copy}</p></div>`;
@@ -224,22 +226,24 @@ function roleStrip(game, index) {
 }
 function board() {return gameView(data.active, false);}
 function archive() {return gameView(viewedGame, true);}
-function scoreTile(name, seat, points, roles) {
+function scoreTile(name, seat, points, rank, roles) {
   let role = "";
   let label = "";
   if (seat === roles?.dealer) { role = "dealer"; label = "Donneur"; }
   else if (seat === roles?.dead) { role = "pause"; label = "Mort"; }
-  else if (seat === roles?.first) { role = "first"; label = "Parle en premier"; }
+  else if (seat === roles?.first) { role = "first"; label = "1er à parler"; }
   return `<article class="score-tile surface tone${seat}" ${role ? `data-role="${role}"` : ""}>
     <div class="tile-player">${avatar(seat)}<span class="tile-name" title="${escape(name)}">${escape(name)}</span></div>
     <strong class="tile-score ${color(points)}">${signed(points)}</strong>
-    ${roles ? `<div class="tile-role">${role ? `<span title="${label}">${icon(role)}${role === "first" ? '<span class="role-first-long">Parle en premier</span><span class="role-first-short" aria-hidden="true">1er</span>' : label}</span>` : ""}</div>` : ""}
+    <span class="tile-rank">${ordinal(rank)}</span>
+    ${roles ? `<div class="tile-role">${role ? `<span>${icon(role)}${label}</span>` : ""}</div>` : ""}
   </article>`;
 }
 function gameView(game, finished) {
   const sums = totals(game);
+  const ranks = ranksFor(sums);
   const roles = finished ? null : rolesFor(game, game.rounds.length);
-  const leaders = game.players.filter((_, index) => sums[index] === Math.max(...sums));
+  const leaders = game.players.filter((_, index) => ranks[index] === 1);
   const heading = finished ? "Partie terminée" : "Tour " + (game.rounds.length + 1);
   return `<section class="board-hero"><div class="wrap"><div class="board-nav">
     ${finished ? back("history", "Historique") : `${back("home")}<button class="board-cancel" type="button" data-action="cancel-game">Annuler la partie</button>`}
@@ -249,7 +253,7 @@ function gameView(game, finished) {
   </div></div></section>
   <section class="wrap board-body" data-player-count="${game.players.length}">
     <div class="round-heading score-heading"><h2>Scores cumulés</h2><small>Points</small></div>
-    <div class="score-tiles">${game.players.map((name, seat) => scoreTile(name, seat, sums[seat], roles)).join("")}</div>
+    <div class="score-tiles">${game.players.map((name, seat) => scoreTile(name, seat, sums[seat], ranks[seat], roles)).join("")}</div>
     <div class="round-heading"><h2>Donnes</h2><small>${game.rounds.length} au total</small></div>
     ${game.rounds.length ? roundTable(game) : empty("♣", "À vous de jouer !", "Après la première donne, ajoute le score ici.")}
     ${finished ? "" : `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${game.rounds.length ? "" : "disabled"}>Terminer la partie</button></div>`}
@@ -447,13 +451,14 @@ function outcomePicker(entry) {
   return `<div class="trick-row"><p class="hint">${name}</p><div class="toggle outcome-picker" role="group" aria-label="Résultat de ${name}">${[true,false].map(won => `<button aria-pressed="${entry.won === won}" data-action="outcome" data-value="${Number(won)}" data-seat="${entry.seat}">${won ? "Gagné" : "Perdu"}</button>`).join("")}</div></div>`;
 }
 function scoreStandings(game) {
-  const ranking = totals(game).map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points);
+  const sums = totals(game);
+  const ranks = ranksFor(sums);
+  const ranking = sums.map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points);
   return `<section class="score-standings" aria-labelledby="score-standings-title">
     <h3 id="score-standings-title">Classement actuel</h3>
     <ul role="list">${ranking.map(({points, seat}) => {
-      const rank = ranking.findIndex(player => player.points === points) + 1;
       const name = escape(game.players[seat]);
-      return `<li><span class="score-standings-name" title="${name}">${name}</span><span class="score-standings-line"><span class="score-rank">${rank}<sup>${rank === 1 ? "er" : "e"}</sup></span><strong class="${color(points)}">${signed(points)}</strong></span></li>`;
+      return `<li><span class="score-standings-name" title="${name}">${name}</span><span class="score-standings-line"><span class="score-rank">${ordinal(ranks[seat])}</span><strong class="${color(points)}">${signed(points)}</strong></span></li>`;
     }).join("")}</ul>
   </section>`;
 }
