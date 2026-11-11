@@ -60,6 +60,7 @@ const icons = {
   first:'<path d="M4 12h15m-6-6 6 6-6 6"/>',
   swap:'<path d="M4 8h15m-4-4 4 4-4 4m5 4H5m4-4-4 4 4 4"/>',
   check:'<path d="m5 12 4 4L19 6"/>',
+  pencil:'<path d="m14 6 4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z"/>',
 };
 const icon = name => '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' + icons[name] + '</svg>';
 const escape = value => String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
@@ -245,11 +246,11 @@ function gameView(game, finished) {
     <div class="round-heading score-heading"><h2>Scores cumulés</h2><small>Points</small></div>
     <div class="score-tiles">${game.players.map((name, seat) => scoreTile(name, seat, sums[seat], roles)).join("")}</div>
     <div class="round-heading"><h2>Donnes</h2><small>${game.rounds.length} au total</small></div>
-    ${game.rounds.length ? roundTable(game, finished) : empty("♣", "À vous de jouer !", "Après la première donne, ajoute le score ici.")}
+    ${game.rounds.length ? roundTable(game) : empty("♣", "À vous de jouer !", "Après la première donne, ajoute le score ici.")}
     ${finished ? "" : `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${game.rounds.length ? "" : "disabled"}>Terminer la partie</button></div>`}
   </section>`;
 }
-function roundTable(game, finished) {
+function roundTable(game) {
   return `<div class="surface score-table-wrap"><table class="score-table" aria-label="Points par donne"><thead><tr><th scope="col">Contrat</th>${game.players.map((name, seat) => `<th scope="col">${avatar(seat)}<span>${escape(name)}</span></th>`).join("")}</tr></thead>
   <tbody>${game.rounds.map((round, index) => {
     const {dead} = rolesFor(game, index);
@@ -262,8 +263,9 @@ function roundTable(game, finished) {
       return round.tricks === null ? name + " (" + entry.tricks + ")" : name;
     }).join(" / ");
     const result = byId[round.contract].outcomeOnly || round.tricks === null ? played : played + ", " + round.tricks + " pli" + plural(round.tricks);
-    const info = `${escape(byId[round.contract].label)}${round.doubled ? " ×2" : ""}<small>Tour ${index + 1}, ${result}</small>`;
-    return `<tr><td>${finished ? info : `<button data-action="edit-score" data-value="${index}" title="Modifier le tour ${index + 1}">${info}</button>`}</td>${round.values.map((value, seat) => `<td class="${seat === dead ? "dead-cell" : color(value)}">${signed(value)}${seat === dead ? "<small>Mort</small>" : ""}</td>`).join("")}</tr>`;
+    const name = escape(byId[round.contract].label);
+    const editLabel = `Modifier le tour ${index + 1}`;
+    return `<tr><td><button class="score-edit" data-action="edit-score" data-value="${index}" aria-label="${editLabel}, ${name}" title="${editLabel}">${icon("pencil")} ${name}${round.doubled ? " ×2" : ""}<small>Tour ${index + 1}, ${result}</small></button></td>${round.values.map((value, seat) => `<td class="${seat === dead ? "dead-cell" : color(value)}">${signed(value)}${seat === dead ? "<small>Mort</small>" : ""}</td>`).join("")}</tr>`;
   }).join("")}</tbody></table></div>`;
 }
 function history() {
@@ -406,9 +408,11 @@ function ask(title, copy, action, label) {
   showDialog(`${dialogHead(title)}<div class="dialog-main"><p class="body-copy">${copy}</p></div><div class="dialog-actions"><button class="btn secondary" data-action="close">Annuler</button><button class="btn primary" data-action="${action}">${label}</button></div>`);
 }
 function openScore(index = null) {
-  const round = index === null ? null : data.active.rounds[index];
-  score = round ? {index, mode:byId[round.contract].mode, contract:round.contract, entries:round.entries.map(entry => ({...entry})), tricks:round.tricks, doubled:round.doubled, rules:{...round.rules}}
-    : {index, mode:"duo", contract:null, entries:[], tricks:null, doubled:false, rules:null};
+  const game = page === "archive" ? viewedGame : data.active;
+  const round = index === null ? null : game?.rounds[index];
+  if (!game || (index !== null && !round)) return;
+  score = round ? {game, index, mode:byId[round.contract].mode, contract:round.contract, entries:round.entries.map(entry => ({...entry})), tricks:round.tricks, doubled:round.doubled, rules:{...round.rules}}
+    : {game, index, mode:"duo", contract:null, entries:[], tricks:null, doubled:false, rules:null};
   if (round && byId[round.contract].outcomeOnly) {
     score.entries = round.entries.map(entry => ({seat:entry.seat,
       won:declarationWon(byId[round.contract], entry, round.entries.length === 2 ? entry.tricks : round.tricks)}));
@@ -417,7 +421,7 @@ function openScore(index = null) {
   renderScore();
 }
 function scoreValues() {
-  const game = data.active;
+  const game = score.game;
   const contract = byId[score.contract];
   if (!contract || score.entries.length < contract.players) return null;
   const individual = contract.target === 0 && score.entries.length === 2;
@@ -431,13 +435,14 @@ function scoreValues() {
   return calculateRound(game, score.index ?? game.rounds.length, contract, score.entries, score.tricks, score.doubled, score.rules ?? game.overrides[contract.id]);
 }
 function trickPicker(selected, max, target, seat = "all") {
-  return `<div class="tricks">${Array.from({length:max + 1}, (_, n) => `<button aria-label="${n} pli${plural(n)}${seat === "all" ? "" : " pour " + escape(data.active.players[seat])}" aria-pressed="${n === selected}" class="${n === target ? "target" : ""}" data-action="tricks" data-value="${n}" data-seat="${seat}">${n}</button>`).join("")}</div>`;
+  return `<div class="tricks">${Array.from({length:max + 1}, (_, n) => `<button aria-label="${n} pli${plural(n)}${seat === "all" ? "" : " pour " + escape(score.game.players[seat])}" aria-pressed="${n === selected}" class="${n === target ? "target" : ""}" data-action="tricks" data-value="${n}" data-seat="${seat}">${n}</button>`).join("")}</div>`;
 }
 function outcomePicker(entry) {
-  return `<div class="trick-row"><p class="hint">${escape(data.active.players[entry.seat])}</p><div class="toggle outcome-picker" role="group" aria-label="Résultat de ${escape(data.active.players[entry.seat])}">${[true,false].map(won => `<button aria-pressed="${entry.won === won}" data-action="outcome" data-value="${Number(won)}" data-seat="${entry.seat}">${won ? "Gagné" : "Perdu"}</button>`).join("")}</div></div>`;
+  const name = escape(score.game.players[entry.seat]);
+  return `<div class="trick-row"><p class="hint">${name}</p><div class="toggle outcome-picker" role="group" aria-label="Résultat de ${name}">${[true,false].map(won => `<button aria-pressed="${entry.won === won}" data-action="outcome" data-value="${Number(won)}" data-seat="${entry.seat}">${won ? "Gagné" : "Perdu"}</button>`).join("")}</div></div>`;
 }
 function renderScore() {
-  const game = data.active;
+  const game = score.game;
   const contract = byId[score.contract];
   const index = score.index ?? game.rounds.length;
   const {dead} = rolesFor(game, index);
@@ -449,7 +454,7 @@ function renderScore() {
   const max = contract?.id === "small" ? 12 : 13;
   const entriesTotal = score.entries.reduce((sum, entry) => sum + (entry.tricks ?? 0), 0);
   const playerHint = contract?.multiple ? "Qui tente le coup ? Un ou deux joueurs." : contract?.players === 2 ? "Qui joue ensemble ?" : contract ? "Qui tente le coup ?" : "Choisis d’abord l’annonce";
-  showDialog(`${dialogHead("Les points du tour " + (index + 1))}
+  showDialog(`${dialogHead((score.index === null ? "Les points du tour " : "Modifier le tour ") + (index + 1))}
     <div class="dialog-main score-entry">${roleStrip(game, index)}
       <div class="entry-grid">
       <fieldset><legend>Contrat</legend><div class="mode-tabs">${Object.entries(modes).map(([key, mode]) => `<button aria-pressed="${key === score.mode}" data-action="mode" data-value="${key}"><span aria-hidden="true">${mode.suit}</span>${mode.name}</button>`).join("")}</div>
@@ -537,16 +542,16 @@ function celebrateGame() {
 function recordScore() {
   const values = scoreValues();
   if (!values) return;
-  const before = totals(data.active);
-  const {index, contract, entries, tricks, doubled} = score;
-  const rules = {...(score.rules ?? data.active.overrides[contract])};
+  const {game, index, contract, entries, tricks, doubled} = score;
+  const before = totals(game);
+  const rules = {...(score.rules ?? game.overrides[contract])};
   const round = {contract, entries, tricks:byId[contract].target === 0 && entries.length === 2 ? null : tricks, doubled, rules, values};
-  if (index === null) data.active.rounds.push(round);
-  else data.active.rounds[index] = round;
+  if (index === null) game.rounds.push(round);
+  else game.rounds[index] = round;
   save();
   dialog.close();
   render();
-  animateScoreChanges(before, totals(data.active));
+  animateScoreChanges(before, totals(game));
   const button = app.querySelector(index === null ? '[data-action="add-score"]' : '[data-action="edit-score"][data-value="' + index + '"]');
   button?.focus({preventScroll:true});
   if (index === null) button?.scrollIntoView({block:"nearest"});

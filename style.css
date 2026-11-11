@@ -261,8 +261,9 @@ input::placeholder {color:#657168}
 .score-table .avatar {width:22px;height:22px;font-size:15px;margin-bottom:2px}
 .score-table tbody tr:nth-child(even) {background:#fff5e4}
 .score-table td:not(:first-child) {font-weight:750;font-variant-numeric:tabular-nums}
-.score-table button {border:0;background:none;text-align:left;padding:2px 0;min-height:41px;color:var(--felt);font-weight:730}
-.score-table button:hover {text-decoration:underline}
+.score-edit {width:100%;border:0;border-radius:6px;background:none;text-align:left;padding:2px 0;min-height:44px;color:var(--felt);font-weight:730}
+.score-edit:hover {text-decoration:underline}
+.score-edit svg {width:19px;height:19px;padding:2px;border-radius:5px;background:#e5e9ce;vertical-align:-4px}
 .score-table small {display:block;font-size:10px}
 .board-actions {
   position:sticky;bottom:0;z-index:2;background:var(--paper);padding:10px 0 max(10px,env(safe-area-inset-bottom));
