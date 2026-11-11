@@ -660,11 +660,18 @@ app.addEventListener("focusin", keepPlayerInputVisible);
 app.addEventListener("focusin", event => {
   if (event.target.matches(".player-name")) updateSuggestions(event.target);
 });
-app.addEventListener("focusout", event => {
-  const card = event.target.closest(".player-input");
-  if (!card || card.contains(event.relatedTarget)) return;
-  card.querySelector(".player-suggestions").hidden = true;
-  card.querySelector(".player-name").setAttribute("aria-expanded","false");
+function dismissSuggestionsOutside(target) {
+  for (const list of app.querySelectorAll(".player-suggestions:not([hidden])")) {
+    if (list.parentElement.contains(target)) continue;
+    list.hidden = true;
+    list.parentElement.querySelector(".player-name").setAttribute("aria-expanded","false");
+  }
+}
+document.addEventListener("focusin", event => dismissSuggestionsOutside(event.target));
+document.addEventListener("pointerdown", event => {
+  // On touch screens a button tap can blur the field before the click arrives.
+  if (event.button === 0 && event.target.closest(".player-suggestions button")) event.preventDefault();
+  dismissSuggestionsOutside(event.target);
 });
 window.visualViewport?.addEventListener("resize", keepPlayerInputVisible);
 window.addEventListener("resize", keepPlayerInputVisible);
