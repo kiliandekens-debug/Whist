@@ -604,3 +604,10 @@ dialog[open] {animation:dialog-in 220ms cubic-bezier(.2,.8,.2,1) both}
 .chart-tip i {width:10px;height:3px;border-radius:2px;flex:none}
 .chart-tip b {margin-left:auto;padding-left:10px;font-variant-numeric:tabular-nums}
 .share-actions {justify-content:flex-end}
+
+.suit-order {display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin-top:9px;font-size:11.5px;color:var(--muted)}
+.suit-order > span:first-child {font-weight:650}
+.suit-rank {display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:0 4px}
+.suit-rank b {font-size:13px;color:var(--ink)}
+.suit-rank b.red-suit {color:var(--negative)}
+.suit-rank i {font-style:normal;opacity:.6;margin-inline:2px}

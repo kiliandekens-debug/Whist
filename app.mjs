@@ -810,7 +810,8 @@ function renderScore() {
     <div class="dialog-main score-entry">${roleStrip(game, index)}
       <div class="entry-grid">
       <fieldset><legend>Contrat</legend><div class="mode-tabs">${Object.entries(modes).map(([key, mode]) => `<button aria-pressed="${key === score.mode}" data-action="mode" data-value="${key}"><span aria-hidden="true">${mode.suit}</span>${mode.name}</button>`).join("")}</div>
-      <div class="chips" data-mode="${score.mode}">${contracts.filter(item => item.mode === score.mode && (item.id !== "piccolo" || game.piccolo)).map(item => `<button aria-pressed="${item.id === score.contract}" data-action="contract" data-value="${item.id}">${item.label}</button>`).join("")}</div></fieldset>
+      <div class="chips" data-mode="${score.mode}">${contracts.filter(item => item.mode === score.mode && (item.id !== "piccolo" || game.piccolo)).map(item => `<button aria-pressed="${item.id === score.contract}" data-action="contract" data-value="${item.id}">${item.label}</button>`).join("")}</div>
+      <p class="suit-order"><span>Ordre des couleurs</span><span class="suit-rank" role="img" aria-label="De la plus forte à la moins forte : cœur, carreau, trèfle, pique">${[["♥","Cœur",true],["♦","Carreau",true],["♣","Trèfle"],["♠","Pique"]].map(([suit, name, red]) => `<b class="${red ? "red-suit" : ""}">${suit}</b> ${name}`).join('<i aria-hidden="true">›</i>')}</span></p></fieldset>
       <fieldset><legend>Qui joue ?</legend><p class="hint player-hint">${playerHint}</p><div class="pick-players">
       ${game.players.map((name, seat) => seat === dead ? "" : `<button ${contract ? "" : "disabled"} aria-label="${escape(name)}" aria-pressed="${score.entries.some(entry => entry.seat === seat)}" data-action="player" data-value="${seat}">${avatar(seat)}<span class="pick-name">${escape(name)}</span></button>`).join("")}</div></fieldset>
       </div>
