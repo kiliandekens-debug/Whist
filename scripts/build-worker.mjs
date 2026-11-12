@@ -1,10 +1,11 @@
 import {mkdir, readFile, writeFile} from "node:fs/promises";
+import {stamp} from "./version.mjs";
 
 const assetFiles = ["index.html", "app.mjs", "score.mjs", "players.mjs", "cloud.mjs", "style.css", "icon.svg", "cards.svg", "apple-touch-icon.png"];
 const source = new URL("../" + (process.argv[2] ?? "dist/"), import.meta.url);
 const entries = await Promise.all(assetFiles.map(async path => {
   let content = await readFile(new URL(path, source), path.endsWith(".png") ? "base64" : "utf8");
-  if (path === "index.html") content = content.replace("<body>", '<body data-storage="supabase">');
+  if (path === "index.html") content = await stamp(content.replace("<body>", '<body data-storage="supabase">'));
   return ["/" + path, content];
 }));
 // The offline shell is optional: older source folders do not contain it.

@@ -1,5 +1,6 @@
 import {mkdir, readFile, writeFile, copyFile, rm} from "node:fs/promises";
 import {build} from "esbuild";
+import {stamp} from "./version.mjs";
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -14,6 +15,8 @@ for (const name of ["app.mjs","cloud.mjs","score.mjs","players.mjs","style.css",
 }
 let html = await readFile(new URL("../index.html", import.meta.url), "utf8");
 html = html.replace('src="/app.mjs"', 'src="/auth.mjs"');
+const commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7);
+html = await stamp(html, process.env.VERCEL_ENV !== "production" && commit ? "aperçu " + commit : "");
 await writeFile(new URL("index.html", output), html);
 await build({
   entryPoints:["vercel/auth.mjs"],outfile:"vercel-public/auth.mjs",bundle:true,

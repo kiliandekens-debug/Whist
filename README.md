@@ -33,3 +33,11 @@ dans Supabase Auth.
 ## Tests
 
 `npm test` vérifie le barème, le répertoire de joueurs et la synchronisation.
+
+## Versions
+
+Le numéro de version est dans `package.json` et s’affiche en bas de
+l’application (avec le commit sur les aperçus Vercel). Pour publier une
+version : `npm version patch`, `minor` ou `major` selon le changement, puis
+ajouter son entrée en tête de `CHANGELOG.md`. `npm test` vérifie que les deux
+correspondent.
