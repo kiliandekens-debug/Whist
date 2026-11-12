@@ -1,4 +1,4 @@
-import {createCloudStore} from "./cloud.mjs";
+import {createCloudStore, canonical} from "./cloud.mjs";
 import {modes, contracts, byId, rolesFor, calculateRound, declarationWon} from "./score.mjs";
 import {playerKey, findPlayer, matchingPlayers, migratePlayers, registerPlayer, renamePlayer, playerStatistics} from "./players.mjs";
 
@@ -20,6 +20,9 @@ function normalize(snapshot) {
   }
   const gameIds = new Set(state.history.map(game => game.id).filter(Boolean));
   state.history = state.history.map(game => {
+    // Games archived before the barème update must keep the scoring they were played with.
+    if (!game.scoringVersion) game = {...game, scoringVersion:1, overrides:game.overrides ?? {}, piccolo:false};
+    else if (!game.overrides) game = {...game, overrides:{}};
     if (game.id) return game;
     const base = "partie-" + game.finished;
     let id = base;
@@ -85,11 +88,16 @@ function tell(message) {
 const storageStatus = document.querySelector("#cloud-status");
 const storageAction = document.querySelector("#cloud-action");
 let storageMode;
+let replaced = false;
 const cloud = document.body.dataset.storage === "supabase" ? createCloudStore({
   authorize:window.whistAuth?.getAccessToken,
   read:() => data,
   write(snapshot, meta) {
-    if (snapshot !== data) data = normalize(snapshot);
+    if (snapshot !== data) {
+      const next = normalize(snapshot);
+      replaced ||= canonical(next) !== canonical(data);
+      data = next;
+    }
     persist({...data,_supabase:meta});
   },
   report(message, action) {
@@ -441,7 +449,7 @@ function scoreValues() {
     const count = score.entries.reduce((sum, entry) => sum + entry.tricks, 0);
     if (count > (contract.id === "small" ? 12 : 13)) return null;
   } else if (score.tricks === null) return null;
-  return calculateRound(game, score.index ?? game.rounds.length, contract, score.entries, score.tricks, score.doubled, score.rules ?? game.overrides[contract.id]);
+  return calculateRound(game, score.index ?? game.rounds.length, contract, score.entries, score.tricks, score.doubled, score.rules ?? game.overrides?.[contract.id]);
 }
 function trickPicker(selected, max, target, seat = "all") {
   return `<div class="tricks">${Array.from({length:max + 1}, (_, n) => `<button aria-label="${n} pli${plural(n)}${seat === "all" ? "" : " pour " + escape(score.game.players[seat])}" aria-pressed="${n === selected}" class="${n === target ? "target" : ""}" data-action="tricks" data-value="${n}" data-seat="${seat}">${n}</button>`).join("")}</div>`;
@@ -566,7 +574,7 @@ function recordScore() {
   if (!values) return;
   const {game, index, contract, entries, tricks, doubled} = score;
   const before = totals(game);
-  const rules = {...(score.rules ?? game.overrides[contract])};
+  const rules = {...(score.rules ?? game.overrides?.[contract])};
   const round = {contract, entries, tricks:byId[contract].target === 0 && entries.length === 2 ? null : tricks, doubled, rules, values};
   if (index === null) game.rounds.push(round);
   else game.rounds[index] = round;
@@ -878,6 +886,7 @@ document.addEventListener("submit", event => {
       data.overrides = overrides;
       data.piccolo = fields.has("piccolo");
       save();
+      render();
       tell("Barème enregistré.");
       break;
     }
@@ -930,8 +939,15 @@ storageAction.addEventListener("click", () => {
     void reloadCloud();
     return;
   }
-  ask("Deux versions du carnet", "Une autre version a été enregistrée sur un autre appareil. Télécharge ta copie avant de charger celle qui a été sauvegardée en ligne.", "accept-cloud", "Télécharger et charger");
+  showDialog(`${dialogHead("Deux versions du carnet")}<div class="dialog-main">
+    <p class="body-copy">Le carnet en ligne a été modifié depuis un autre appareil et ne correspond plus à celui-ci. Choisis la version à garder.</p>
+    <p class="hint">« Garder cet appareil » remplace le carnet en ligne. « Charger la version en ligne » télécharge d’abord une copie de cet appareil, puis la remplace.</p></div>
+    <div class="dialog-actions"><button class="btn secondary" data-action="keep-local">Garder cet appareil</button><button class="btn primary" data-action="accept-cloud">Charger la version en ligne</button></div>`);
 });
+actions["keep-local"] = () => {
+  dialog.close();
+  void cloud.keepLocal();
+};
 actions["accept-cloud"] = () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:"application/json"}));
   const download = document.createElement("a");
@@ -943,7 +959,20 @@ actions["accept-cloud"] = () => {
   void reloadCloud(true);
 };
 
+let ready = false;
+// Pick up changes made on another device, and send what could not be sent earlier.
+async function refreshCloud() {
+  if (!ready || document.hidden || cloud.conflicted()) return;
+  replaced = false;
+  await cloud.load();
+  if (!replaced) return;
+  if (dialog.open) dialog.close();
+  score = null;
+  openPath();
+  tell("Carnet mis à jour depuis un autre appareil.");
+}
 function startNavigation() {
+  ready = true;
   openPath();
   window.addEventListener("popstate", () => {
     if (dialog.open) dialog.close();
@@ -951,6 +980,12 @@ function startNavigation() {
   });
 }
 if (cloud) {
+  if (window.whistAuth) window.whistAuth.hasUnsaved = cloud.pending;
   app.textContent = "Chargement du carnet…";
-  void cloud.load().then(startNavigation);
+  void cloud.load({remote:window.whistAuth?.initial ?? null}).then(startNavigation);
+  window.addEventListener("online", () => {void refreshCloud();});
+  document.addEventListener("visibilitychange", () => {void refreshCloud();});
 } else startNavigation();
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
