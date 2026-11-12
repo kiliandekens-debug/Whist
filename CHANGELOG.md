@@ -7,6 +7,11 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.4.1 — 2026-11-12
+
+### Modifié
+- Image de partage redessinée : vainqueur mis en avant, classement, évolution des scores et coup de la partie.
+
 ## 1.4.0 — 2026-11-12
 
 ### Ajouté

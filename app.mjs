@@ -354,54 +354,213 @@ function shareText(game) {
     .map(({points, seat}) => ranks[seat] + (ranks[seat] === 1 ? "er" : "e") + " " + game.players[seat] + " " + signed(points));
   return "Whist du " + formatDate(game.finished) + "\n" + lines.join("\n") + "\n" + game.rounds.length + " donne" + plural(game.rounds.length);
 }
+// The highest score a declarer took in a single round, for the picture's closing line.
+function bestRound(game) {
+  let best = null;
+  game.rounds.forEach(round => round.entries.forEach(({seat}) => {
+    if (round.values[seat] > (best?.points ?? 0)) best = {seat, points:round.values[seat], contract:byId[round.contract]?.label};
+  }));
+  return best;
+}
 function shareImage(game) {
   const sums = totals(game);
   const ranks = ranksFor(sums);
   const rows = sums.map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points);
+  const winners = rows.filter(row => ranks[row.seat] === 1);
+  const count = game.rounds.length;
+  const feat = bestRound(game);
+  const width = 1080;
+  const listTop = 640;
+  const listHeight = 44 + rows.length * 122;
+  const chartTop = listTop + listHeight + 32;
+  const chartHeight = count > 1 ? 400 : 0;
+  const featTop = chartTop + (chartHeight ? chartHeight + 32 : 0);
   const canvas = document.createElement("canvas");
-  canvas.width = 1080;
-  canvas.height = 470 + rows.length * 150;
+  canvas.width = width;
+  canvas.height = featTop + (feat ? 190 : 40);
   const pen = canvas.getContext("2d");
-  const font = (size, weight = 700) => { pen.font = weight + " " + size + "px system-ui, -apple-system, sans-serif"; };
-  pen.fillStyle = "#faf4e8";
-  pen.fillRect(0, 0, canvas.width, canvas.height);
-  pen.fillStyle = "#28533f";
-  pen.fillRect(0, 0, canvas.width, 330);
-  pen.fillStyle = "#f6ca69";
-  font(46);
-  pen.fillText("♠ Carnet de Whist", 70, 110);
-  pen.fillStyle = "#fff9e9";
-  font(92, 800);
-  pen.fillText("Partie terminée", 70, 220);
-  pen.fillStyle = "#ecdfc5";
-  font(40, 500);
-  pen.fillText(formatDate(game.finished) + " · " + game.rounds.length + " donne" + plural(game.rounds.length), 70, 285);
-  rows.forEach(({points, seat}, index) => {
-    const top = 380 + index * 150;
+  const font = (size, weight = 700, family = "system-ui, -apple-system, sans-serif") => { pen.font = weight + " " + size + "px " + family; };
+  const display = 'ui-rounded, "Avenir Next", system-ui, -apple-system, sans-serif';
+  const fit = (text, room) => {
+    while (text.length > 1 && pen.measureText(text).width > room) text = text.slice(0, -2) + "…";
+    return text;
+  };
+  const panel = (top, height) => {
     pen.fillStyle = "#fffaf1";
-    pen.strokeStyle = "#ded1b9";
-    pen.lineWidth = 3;
     pen.beginPath();
-    pen.roundRect(60, top, 960, 126, 28);
+    pen.roundRect(56, top, width - 112, height, 40);
     pen.fill();
+  };
+
+  // Felt table with the faint diagonal weave of the home screen.
+  const felt = pen.createLinearGradient(0, 0, width, canvas.height);
+  felt.addColorStop(0, "#2f5d47");
+  felt.addColorStop(1, "#17322a");
+  pen.fillStyle = felt;
+  pen.fillRect(0, 0, width, canvas.height);
+  pen.strokeStyle = "#ffffff09";
+  pen.lineWidth = 2;
+  for (let offset = -canvas.height; offset < width; offset += 26) {
+    pen.beginPath();
+    pen.moveTo(offset, 0);
+    pen.lineTo(offset + canvas.height, canvas.height);
     pen.stroke();
-    pen.fillStyle = "#5d5f50";
-    font(44);
-    pen.textAlign = "left";
-    pen.fillText(ranks[seat] + (ranks[seat] === 1 ? "er" : "e"), 96, top + 80);
+  }
+  pen.strokeStyle = "#d6e2a540";
+  pen.lineWidth = 3;
+  pen.beginPath();
+  pen.roundRect(24, 24, width - 48, canvas.height - 48, 52);
+  pen.stroke();
+
+  pen.textBaseline = "alphabetic";
+  pen.fillStyle = "#f6ca69";
+  font(38, 750);
+  pen.fillText("♠  Carnet de Whist", 84, 122);
+  pen.fillStyle = "#ecdfc5";
+  font(32, 500);
+  pen.textAlign = "right";
+  pen.fillText(formatDate(game.finished), width - 84, 122);
+  pen.textAlign = "left";
+
+  // Two fanned aces, as on the home screen.
+  const card = (x, y, angle, paper, ink, suit) => {
+    pen.save();
+    pen.translate(x, y);
+    pen.rotate(angle * Math.PI / 180);
+    pen.shadowColor = "#0d1f1870";
+    pen.shadowBlur = 30;
+    pen.shadowOffsetY = 14;
+    pen.fillStyle = paper;
+    pen.beginPath();
+    pen.roundRect(-112, -158, 224, 316, 26);
+    pen.fill();
+    pen.shadowColor = "transparent";
+    pen.fillStyle = ink;
+    pen.textAlign = "center";
+    font(40, 800, display);
+    pen.fillText("A", -74, -98);
+    font(34, 700);
+    pen.fillText(suit, -74, -60);
+    font(140, 700);
+    pen.fillText(suit, 0, 52);
+    pen.restore();
+  };
+  card(822, 372, -13, "#eda58d", "#8f2f27", "♥");
+  card(900, 396, 9, "#fff6dc", "#28533f", "♣");
+
+  pen.fillStyle = "#ecdfc5";
+  font(30, 700);
+  pen.letterSpacing = "6px";
+  pen.fillText(winners.length > 1 ? "VAINQUEURS EX ÆQUO" : "VAINQUEUR", 86, 250);
+  pen.letterSpacing = "0px";
+  pen.fillStyle = "#f6ca69";
+  let size = 190;
+  const champion = winners.map(row => game.players[row.seat]).join(" & ");
+  do { font(size, 800, display); size -= 10; } while (size > 70 && pen.measureText(champion).width > 590);
+  pen.fillText(fit(champion, 590), 80, 420);
+  pen.fillStyle = "#fff9e9";
+  font(64, 800, display);
+  const lead = signed(winners[0].points) + " point" + plural(Math.abs(winners[0].points));
+  pen.fillText(lead, 84, 512);
+  pen.fillStyle = "#ecdfc5";
+  font(32, 500);
+  pen.fillText(count + " donne" + plural(count) + " · " + game.players.length + " joueurs", 86, 568);
+
+  // Final ranking.
+  panel(listTop, listHeight);
+  const medals = [["#f6ca69", "#1b392d"], ["#dfe3dc", "#23332b"], ["#ecc9a9", "#5a3018"]];
+  rows.forEach(({points, seat}, index) => {
+    const middle = listTop + 22 + index * 122 + 61;
+    if (index) {
+      pen.strokeStyle = "#ded1b9";
+      pen.lineWidth = 2;
+      pen.beginPath();
+      pen.moveTo(96, middle - 61);
+      pen.lineTo(width - 96, middle - 61);
+      pen.stroke();
+    }
+    const [fill, ink] = medals[ranks[seat] - 1] ?? ["#fffaf1", "#5d5f50"];
+    pen.fillStyle = fill;
+    pen.beginPath();
+    pen.arc(140, middle, 40, 0, Math.PI * 2);
+    pen.fill();
+    if (ranks[seat] > 3) {
+      pen.strokeStyle = "#ded1b9";
+      pen.lineWidth = 3;
+      pen.stroke();
+    }
+    pen.fillStyle = ink;
+    pen.textAlign = "center";
+    font(42, 800, display);
+    pen.fillText(ranks[seat], 140, middle + 15);
+    pen.fillStyle = chartColors[seat];
+    pen.beginPath();
+    pen.roundRect(206, middle - 24, 12, 48, 6);
+    pen.fill();
     const score = signed(points);
-    font(64, 800);
+    font(64, 800, display);
     pen.fillStyle = points > 0 ? "#236044" : points < 0 ? "#a13e34" : "#23332b";
     pen.textAlign = "right";
-    pen.fillText(score, 984, top + 86);
-    const room = 984 - pen.measureText(score).width - 40 - 210;
+    pen.fillText(score, width - 100, middle + 22);
+    const room = width - 100 - pen.measureText(score).width - 40 - 244;
     pen.fillStyle = "#23332b";
-    font(56);
     pen.textAlign = "left";
-    let name = game.players[seat];
-    while (name.length > 1 && pen.measureText(name).width > room) name = name.slice(0, -2) + "…";
-    pen.fillText(name, 210, top + 84);
+    font(54, 750, display);
+    pen.fillText(fit(game.players[seat], room), 244, middle + 19);
   });
+
+  // How the scores moved, in the same colours as the bars beside the names.
+  if (chartHeight) {
+    panel(chartTop, chartHeight);
+    pen.fillStyle = "#5d5f50";
+    font(30, 650);
+    pen.fillText("Évolution des scores", 100, chartTop + 62);
+    const series = game.players.map(() => [0]);
+    game.rounds.forEach(round => round.values.forEach((value, seat) => series[seat].push(series[seat].at(-1) + value)));
+    const values = series.flat();
+    const low = Math.min(...values);
+    const high = Math.max(...values);
+    const left = 104, right = width - 112, top = chartTop + 104, bottom = chartTop + chartHeight - 48;
+    const x = index => left + index / count * (right - left);
+    const y = value => top + (high - value) / (high - low || 1) * (bottom - top);
+    pen.strokeStyle = "#5d5f5080";
+    pen.lineWidth = 2;
+    pen.setLineDash([8, 10]);
+    pen.beginPath();
+    pen.moveTo(left, y(0));
+    pen.lineTo(right, y(0));
+    pen.stroke();
+    pen.setLineDash([]);
+    pen.lineJoin = "round";
+    pen.lineCap = "round";
+    // Draw the winner last so the leading line stays on top.
+    [...rows].reverse().forEach(({seat}) => {
+      pen.strokeStyle = chartColors[seat];
+      pen.lineWidth = 7;
+      pen.beginPath();
+      series[seat].forEach((value, index) => pen[index ? "lineTo" : "moveTo"](x(index), y(value)));
+      pen.stroke();
+      pen.fillStyle = chartColors[seat];
+      pen.strokeStyle = "#fffaf1";
+      pen.lineWidth = 5;
+      pen.beginPath();
+      pen.arc(x(count), y(series[seat].at(-1)), 12, 0, Math.PI * 2);
+      pen.fill();
+      pen.stroke();
+    });
+  }
+
+  if (feat) {
+    pen.textAlign = "center";
+    pen.fillStyle = "#f6ca69";
+    font(28, 700);
+    pen.letterSpacing = "5px";
+    pen.fillText("LE COUP DE LA PARTIE", width / 2, featTop + 54);
+    pen.letterSpacing = "0px";
+    pen.fillStyle = "#fff9e9";
+    font(44, 750, display);
+    pen.fillText(fit(game.players[feat.seat] + " · " + (feat.contract ?? "Contrat") + " · " + signed(feat.points), width - 180), width / 2, featTop + 116);
+  }
   return new Promise(resolve => canvas.toBlob(blob => resolve(blob && new File([blob], "whist.png", {type:"image/png"})), "image/png"));
 }
 async function shareGame(game) {
