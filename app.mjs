@@ -254,7 +254,7 @@ function gameView(game, finished) {
   const leaders = game.players.filter((_, index) => ranks[index] === 1);
   const heading = finished ? "Partie terminée" : "Tour " + (game.rounds.length + 1);
   return `<section class="board-hero"><div class="wrap"><div class="board-nav">
-    ${finished ? back("history", "Historique") : `${back("home")}<button class="board-cancel" type="button" data-action="cancel-game">Annuler la partie</button>`}
+    ${finished ? `${back("history", "Historique")}<button class="board-cancel" type="button" data-action="delete-game">Supprimer la partie</button>` : `${back("home")}<button class="board-cancel" type="button" data-action="cancel-game">Annuler la partie</button>`}
   </div><div class="board-top">
     <div><span class="eyebrow">${finished ? formatDate(game.finished) : "Feuille de score, " + game.players.length + " joueurs"}</span><h1>${heading}</h1></div>
     ${finished ? `<div class="board-leader">${icon("scores")}<span>${leaders.length > 1 ? "En tête ex æquo" : "En tête"}<strong>${leaders.map(escape).join(", ")}</strong></span></div>` : '<div class="board-emblem" aria-hidden="true"><span>♦</span><span>♠</span></div>'}
@@ -712,6 +712,18 @@ const actions = {
     dialog.close();
     go("home", true);
     tell("Partie annulée.");
+  },
+  "delete-game"() {
+    ask("Supprimer cette partie ?", "Elle sera retirée de l’historique, des fiches joueurs et des classements. Cette action est définitive.", "confirm-delete-game", "Supprimer la partie", "Garder la partie");
+  },
+  "confirm-delete-game"() {
+    if (page !== "archive" || !viewedGame) return;
+    data.history = data.history.filter(game => game !== viewedGame);
+    viewedGame = null;
+    save();
+    dialog.close();
+    go("history", true);
+    tell("Partie supprimée.");
   },
   finish() { ask("Terminer la partie ?", "Les scores et les donnes seront consultables dans l’historique.", "confirm-finish", "Terminer la partie"); },
   "confirm-finish"() {

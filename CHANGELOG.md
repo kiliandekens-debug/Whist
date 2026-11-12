@@ -7,6 +7,11 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.3.0 — 2026-11-12
+
+### Ajouté
+- Suppression d’une partie de l’historique, avec confirmation.
+
 ## 1.2.0 — 2026-11-12
 
 ### Ajouté
