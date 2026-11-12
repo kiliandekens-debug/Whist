@@ -78,3 +78,20 @@ export function playerStatistics(state, playerId) {
   }
   return stats;
 }
+
+// Finished games only: games played, first places (ties included) and cumulative points.
+export function overallStatistics(state) {
+  const stats = new Map();
+  for (const game of state.history) {
+    const totals = game.players.map((_, seat) => game.rounds.reduce((sum, round) => sum + round.values[seat], 0));
+    const best = Math.max(...totals);
+    game.playerIds.forEach((id, seat) => {
+      const record = stats.get(id) ?? {games:0, wins:0, points:0};
+      record.games++;
+      record.wins += Number(totals[seat] === best);
+      record.points += totals[seat];
+      stats.set(id, record);
+    });
+  }
+  return stats;
+}

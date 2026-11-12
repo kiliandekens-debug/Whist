@@ -7,6 +7,16 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.4.0 — 2026-11-12
+
+### Ajouté
+- Classement général des joueurs : parties, victoires, points cumulés et moyenne par partie.
+- Graphique d’évolution des scores, donne après donne, dans chaque partie.
+- Partage du résultat d’une partie terminée, en image et en texte.
+
+### Modifié
+- Barème : gain et perte, ainsi que pli en plus et pli manquant, se règlent séparément pour tous les contrats.
+
 ## 1.3.0 — 2026-11-12
 
 ### Ajouté

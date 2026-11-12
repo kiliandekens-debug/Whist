@@ -36,3 +36,15 @@ test("migration links old games to players and statistics count declarations", (
   assert.deepEqual(stats.contracts.ab9, {attempts:1, wins:1, losses:0, points:30});
   assert.deepEqual(stats.contracts.small, {attempts:1, wins:0, losses:1, points:-21});
 });
+
+test("the overall ranking counts finished games, first places and points", async () => {
+  const {overallStatistics} = await import("../players.mjs");
+  const game = (playerIds, ...rounds) => ({players:playerIds, playerIds, rounds:rounds.map(values => ({values}))});
+  const stats = overallStatistics({history:[
+    game(["a","b","c","d"], [30,-10,-10,-10], [-9,-9,9,9]),
+    game(["a","b","c","d","e"], [5,0,5,-5,-5]),
+  ], active:game(["a","b","c","d"], [99,-33,-33,-33])});
+  assert.deepEqual(stats.get("a"), {games:2, wins:2, points:26});
+  assert.deepEqual(stats.get("c"), {games:2, wins:1, points:4});
+  assert.deepEqual(stats.get("e"), {games:1, wins:0, points:-5});
+});
