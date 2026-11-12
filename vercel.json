@@ -6,7 +6,7 @@
   "rewrites": [
     {"source":"/(accueil|nouvelle-partie|partie|historique|joueurs|classements|bareme|groupes)","destination":"/index.html"},
     {"source":"/nouvelle-partie/table","destination":"/index.html"},
-    {"source":"/(historique|joueurs)/:id","destination":"/index.html"}
+    {"source":"/(historique|joueurs|suivre)/:id","destination":"/index.html"}
   ],
   "headers": [{
     "source": "/(.*)",

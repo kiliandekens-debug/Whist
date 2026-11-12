@@ -6,9 +6,42 @@
   <meta name="theme-color" content="#faf4e8">
   <meta name="description" content="Le carnet de score de vos parties de whist à quatre ou cinq.">
   <title>Carnet de Whist</title>
+  <meta name="color-scheme" content="light dark">
+  <meta name="application-name" content="Whist">
+  <meta name="apple-mobile-web-app-title" content="Whist">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
   <link rel="stylesheet" href="/style.css">
+  <script>
+    // Chosen before the page paints so a dark room never gets a white flash.
+    (() => {
+      const media = matchMedia("(prefers-color-scheme: dark)");
+      const labels = {auto:"Thème auto", dark:"Thème sombre", light:"Thème clair"};
+      let choice = "auto";
+      try { choice = localStorage.getItem("whist-theme") || "auto"; } catch {}
+      if (!labels[choice]) choice = "auto";
+      function apply() {
+        const dark = choice === "dark" || (choice === "auto" && media.matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        document.querySelector('meta[name="theme-color"]').content = dark ? "#14211b" : "#faf4e8";
+        const toggle = document.getElementById("theme-toggle");
+        if (toggle) toggle.textContent = labels[choice];
+      }
+      apply();
+      media.addEventListener("change", apply);
+      document.addEventListener("DOMContentLoaded", apply);
+      document.addEventListener("click", event => {
+        if (!event.target.closest?.("#theme-toggle")) return;
+        choice = {auto:"dark", dark:"light", light:"auto"}[choice];
+        try { localStorage.setItem("whist-theme", choice); } catch {}
+        apply();
+      });
+    })();
+  </script>
   <script type="module" src="/app.mjs"></script>
 </head>
 <body>
@@ -25,7 +58,7 @@
   </header>
   <main id="app"></main>
   <aside class="wrap cloud-controls"><span id="cloud-status" role="status"></span><button type="button" class="quiet" id="cloud-action" hidden></button></aside>
-  <footer class="footer wrap"><span><span aria-hidden="true">♠</span> Carnet de Whist</span><span class="footer-note" id="app-version"></span></footer>
+  <footer class="footer wrap"><span><span aria-hidden="true">♠</span> Carnet de Whist</span><button type="button" class="theme-toggle" id="theme-toggle" title="Changer de thème">Thème auto</button><span class="footer-note" id="app-version"></span></footer>
   <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
   <div id="toast" role="status"></div>
 </body>

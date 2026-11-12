@@ -2,7 +2,7 @@
 // The network always wins when it answers; the copy is only a fallback.
 const cacheName = "whist-shell-v1";
 const shell = ["/index.html", "/app.mjs", "/cloud.mjs", "/score.mjs", "/players.mjs", "/style.css",
-  "/cards.svg", "/icon.svg", "/apple-touch-icon.png", "/auth.mjs"];
+  "/cards.svg", "/icon.svg", "/apple-touch-icon.png", "/auth.mjs", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(cacheName)

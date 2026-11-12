@@ -7,6 +7,14 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.6.0 — 2026-11-12
+
+### Ajouté
+- Lien de suivi : les autres joueurs suivent la partie en direct, en lecture seule et sans compte.
+- Mode sombre, automatique selon l’appareil ou choisi avec le bouton « Thème » en bas de page.
+- Installation sur l’écran d’accueil avec nom, icône et couleurs propres, y compris sur Android.
+- « Mot de passe oublié ? » sur l’écran de connexion.
+
 ## 1.5.0 — 2026-11-12
 
 ### Ajouté

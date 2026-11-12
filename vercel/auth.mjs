@@ -12,6 +12,9 @@ let loadedUser = null;
 let starting = false;
 let failed = false;
 let rejectedToken = null;
+let recovering = false;
+// A follow link is public and read-only: it never goes through sign-in.
+const watching = /^\/suivre\/([0-9a-f]{64})\/?$/.exec(location.pathname);
 navigation.hidden = true;
 app.textContent = "Connexion au carnet…";
 
@@ -36,7 +39,8 @@ function showLogin(message = "Retrouve tes parties et tes scores sur tous tes ap
         <button class="btn primary" type="submit">Se connecter</button>
         <button class="btn secondary" type="button" id="login-link">Recevoir un lien par e-mail</button>
       </div>
-      <p id="login-status" role="status" aria-live="polite" style="margin-top:20px"></p>
+      <button class="text-action" type="button" id="login-reset" style="margin-top:10px">Mot de passe oublié ?</button>
+      <p id="login-status" role="status" aria-live="polite" style="margin-top:12px"></p>
     </form>
     <p class="hint">Si tu demandes un lien, ouvre-le dans le navigateur utilisé pour cette demande.</p>
     ${config.preview ? '<p class="hint">Les parties jouées dans cet aperçu restent ici.</p>' : ""}
@@ -70,6 +74,15 @@ function showLogin(message = "Retrouve tes parties et tes scores sur tous tes ap
       return error.name === "AuthRetryableFetchError"
         ? "Connexion interrompue. Réessaie quand le réseau est disponible."
         : "Adresse ou mot de passe incorrect.";
+    });
+  });
+  document.querySelector("#login-reset").addEventListener("click", () => {
+    if (!form.querySelector("#login-email").reportValidity()) return;
+    void attempt("Envoi de l’e-mail…", async () => {
+      const {error} = await client.auth.resetPasswordForEmail(email(), {redirectTo:location.origin + "/"});
+      return error?.name === "AuthRetryableFetchError"
+        ? "Connexion interrompue. Réessaie quand le réseau est disponible."
+        : "Si un compte existe pour cette adresse, un e-mail vient de partir. Ouvre son lien dans ce navigateur pour choisir un nouveau mot de passe.";
     });
   });
   document.querySelector("#login-link").addEventListener("click", () => {
@@ -160,8 +173,107 @@ async function launch(userId, initial) {
   password.type = "button";
   password.textContent = "Mot de passe";
   password.addEventListener("click", choosePassword);
-  document.querySelector(".cloud-controls").append(password, logout);
+  const follow = document.createElement("button");
+  follow.type = "button";
+  follow.textContent = "Lien de suivi";
+  follow.addEventListener("click", () => {void manageFollowLink();});
+  const buttons = document.createElement("span");
+  buttons.className = "cloud-buttons";
+  // A preview has its own notebook, which the follow link does not reach.
+  buttons.append(...(config.preview ? [] : [follow]), password, logout);
+  for (const button of buttons.children) button.className = "quiet";
+  document.querySelector(".cloud-controls").append(buttons);
   await import("./app.mjs");
+  if (recovering) choosePassword();
+}
+
+// Lets the owner create, share or switch off the read-only link to the current game.
+async function manageFollowLink(action = "get") {
+  const dialog = document.querySelector("#dialog");
+  const frame = body => {
+    dialog.innerHTML = `<header class="dialog-head"><div><h2 id="dialog-title">Lien de suivi</h2></div><button class="dialog-close" data-action="close" aria-label="Fermer">×</button></header>
+      <div class="dialog-main share-link">${body}</div>`;
+    if (!dialog.open) dialog.showModal();
+  };
+  frame('<p class="body-copy">Un instant…</p>');
+  let token = null;
+  let problem = null;
+  try {
+    const {data, error} = await client.rpc("whist_share_link", {action});
+    token = data;
+    problem = error;
+  } catch (error) { problem = error; }
+  if (problem) {
+    frame(`<p class="body-copy">${problem.code === "PGRST202"
+      ? "Le suivi en direct n’est pas encore activé sur le serveur. Il faut exécuter une fois le fichier supabase/whist-share.sql dans Supabase."
+      : "Le lien de suivi n’est pas disponible pour l’instant. Vérifie ta connexion et réessaie."}</p>`);
+    return;
+  }
+  if (!token) {
+    frame(`<p class="body-copy">Crée un lien à envoyer aux autres joueurs : ils verront la partie en cours et ses scores se mettre à jour, sans compte et sans pouvoir rien modifier.</p>
+      <button class="btn primary" type="button" id="follow-create">Créer le lien de suivi</button>`);
+    dialog.querySelector("#follow-create").addEventListener("click", () => {void manageFollowLink("create");});
+    return;
+  }
+  const url = location.origin + "/suivre/" + token;
+  frame(`<p class="body-copy">Toute personne qui a ce lien voit la partie en cours et la dernière partie terminée, sans pouvoir rien modifier.</p>
+    <input readonly aria-label="Lien de suivi" value="${url}">
+    <button class="btn primary" type="button" id="follow-send">${navigator.share ? "Envoyer le lien" : "Copier le lien"}</button>
+    <button class="btn secondary" type="button" id="follow-revoke">Désactiver ce lien</button>
+    <p class="hint" role="status" id="follow-status"></p>`);
+  dialog.querySelector("input").addEventListener("focus", event => event.target.select());
+  dialog.querySelector("#follow-send").addEventListener("click", async () => {
+    try {
+      if (navigator.share) await navigator.share({title:"Whist en direct", url});
+      else {
+        await navigator.clipboard.writeText(url);
+        dialog.querySelector("#follow-status").textContent = "Lien copié.";
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") dialog.querySelector("#follow-status").textContent = "Sélectionne le lien ci-dessus pour le copier.";
+    }
+  });
+  dialog.querySelector("#follow-revoke").addEventListener("click", () => {
+    if (confirm("Les personnes qui ont ce lien ne pourront plus suivre la partie. Désactiver le lien ?")) void manageFollowLink("revoke");
+  });
+}
+
+// The public, read-only page behind a follow link.
+async function startWatching(token) {
+  app.textContent = "Chargement de la partie…";
+  const read = async () => {
+    const {data, error} = await client.rpc("whist_shared", {share_token:token});
+    if (error) throw error;
+    return data;
+  };
+  let state;
+  try { state = await read(); }
+  catch { return showFailure(); }
+  if (!state) {
+    app.innerHTML = '<section class="wrap narrow page"><div class="page-head"><h1>Lien inactif</h1><p>Ce lien de suivi a été désactivé. Demande un nouveau lien à la personne qui tient les scores.</p></div></section>';
+    return;
+  }
+  document.body.dataset.viewer = "true";
+  window.whistViewer = {state};
+  try { await import("./app.mjs"); }
+  catch { return showFailure(); }
+  let revision = state.revision;
+  let busy = false;
+  async function refresh() {
+    if (busy || document.hidden) return;
+    busy = true;
+    try {
+      const next = await read();
+      if (!next) location.reload();
+      else if (next.revision !== revision) {
+        revision = next.revision;
+        window.whistViewer.update(next);
+      }
+    } catch {}
+    busy = false;
+  }
+  setInterval(refresh, 8000);
+  document.addEventListener("visibilitychange", refresh);
 }
 
 async function startOffline(userId) {
@@ -213,14 +325,20 @@ async function start(session) {
 }
 
 client.auth.onAuthStateChange((event, session) => {
+  if (watching) return;
   if (event === "SIGNED_OUT") forgetUser();
+  if (event === "PASSWORD_RECOVERY") {
+    recovering = true;
+    if (loadedUser) choosePassword();
+  }
   if (loadedUser) {
     if (event === "SIGNED_OUT" || (session && session.user.id !== loadedUser)) location.reload();
   } else if (session) setTimeout(() => {void start(session);}, 0);
 });
 
 const known = lastUser();
-if (known && !navigator.onLine) await startOffline(known);
+if (watching) await startWatching(watching[1]);
+else if (known && !navigator.onLine) await startOffline(known);
 else {
   // Refreshing an expired session can retry for a long time on a dead network.
   const waiting = known ? new Promise(resolve => setTimeout(resolve, 8000, null)) : null;
