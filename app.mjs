@@ -195,11 +195,35 @@ function home() {
       <ul class="home-game-players" aria-label="Joueurs de la partie">${game.players.map((name,seat) => `<li>${avatar(seat)}<span title="${escape(name)}">${escape(name)}</span></li>`).join("")}</ul>
       <div class="home-game-actions"><button class="btn primary" data-action="resume">Reprendre ${icon("arrow")}</button><button class="btn secondary" data-action="new">Nouvelle partie</button></div>
     </section>` : ""}
+    ${homeCards()}
     <nav class="home-shortcuts" aria-label="Ton carnet">
       <a class="shortcut shortcut-players" href="/joueurs" data-action="players"><span class="shortcut-symbol" aria-hidden="true">♣︎</span><span><strong>Joueurs</strong><small>${data.roster.length ? data.roster.length + " joueur" + plural(data.roster.length) : "Ajouter un joueur"}</small></span>${icon("arrow")}</a>
       <a class="shortcut shortcut-history" href="/historique" data-action="history"><span class="shortcut-symbol" aria-hidden="true">♥︎</span><span><strong>Historique</strong><small>${data.history.length ? data.history.length + " partie" + plural(data.history.length) : "Aucune partie"}</small></span>${icon("arrow")}</a>
     </nav>
   </div>`;
+}
+// What happened last and who leads overall, so the home screen says something between games.
+function homeCards() {
+  const game = data.history[0];
+  if (!game) return "";
+  const sums = totals(game);
+  const ranks = ranksFor(sums);
+  const rows = sums.map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points);
+  const id = escape(game.id);
+  const last = `<section class="home-card surface" aria-labelledby="home-last-title">
+    <div class="home-card-heading"><h2 id="home-last-title">Dernière partie</h2><small>${formatDate(game.finished)}</small></div>
+    <ol class="home-ranking" role="list">${rows.map(({points, seat}) => `<li><span class="home-rank medal${ranks[seat]}">${ranks[seat]}</span><span class="home-rank-name">${escape(game.players[seat])}</span><strong class="${color(points)}">${signed(points)}</strong></li>`).join("")}</ol>
+    <a class="text-action" href="/historique/${encodeURIComponent(game.id)}" data-action="view-game" data-value="${id}">Revoir la partie ${icon("arrow")}</a>
+  </section>`;
+  const general = overallStatistics(data);
+  const leaders = data.history.length < 2 ? [] : data.roster.map(player => ({player, record:general.get(player.id)}))
+    .filter(item => item.record).sort((a, b) => b.record.wins - a.record.wins || b.record.points - a.record.points).slice(0, 3);
+  const podium = leaders.length ? `<section class="home-card surface" aria-labelledby="home-podium-title">
+    <div class="home-card-heading"><h2 id="home-podium-title">Classement</h2><small>${data.history.length} parties terminées</small></div>
+    <ol class="home-ranking" role="list">${leaders.map(({player, record}, index) => `<li><span class="home-rank medal${index + 1}">${index + 1}</span><span class="home-rank-name">${escape(player.nickname)}<small>${record.wins} victoire${plural(record.wins)}</small></span><strong class="${color(record.points)}">${signed(record.points)}</strong></li>`).join("")}</ol>
+    <a class="text-action" href="/classements" data-action="statistics">Tous les classements ${icon("arrow")}</a>
+  </section>` : "";
+  return `<div class="home-cards">${last}${podium}</div>`;
 }
 function setup() {
   const count = draft.players.length;
