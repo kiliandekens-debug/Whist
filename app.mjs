@@ -1,6 +1,6 @@
 import {createCloudStore, canonical} from "./cloud.mjs";
 import {modes, contracts, byId, rolesFor, calculateRound, declarationWon} from "./score.mjs";
-import {playerKey, findPlayer, matchingPlayers, migratePlayers, registerPlayer, renamePlayer, playerStatistics} from "./players.mjs";
+import {playerKey, findPlayer, matchingPlayers, migratePlayers, registerPlayer, renamePlayer, playerStatistics, overallStatistics} from "./players.mjs";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
@@ -44,8 +44,10 @@ let swap = null;
 let viewedGame = null;
 let viewedPlayerId = null;
 let playerToDelete = null;
-let statsContract = "small";
+let statsContract = "all";
 let statsOrder = "wins";
+let overallOrder = "wins";
+let chart = null;
 let fromRules = "home";
 let toastTimer;
 let restoreFocus;
@@ -63,6 +65,7 @@ const icons = {
   first:'<path d="M4 12h15m-6-6 6 6-6 6"/>',
   swap:'<path d="M4 8h15m-4-4 4 4-4 4m5 4H5m4-4-4 4 4 4"/>',
   check:'<path d="m5 12 4 4L19 6"/>',
+  share:'<path d="M12 15V4m-4 4 4-4 4 4M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
   pencil:'<path d="m14 6 4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z"/>',
 };
 const icon = name => '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' + icons[name] + '</svg>';
@@ -262,10 +265,162 @@ function gameView(game, finished) {
   <section class="wrap board-body" data-player-count="${game.players.length}">
     <div class="round-heading score-heading"><h2>Scores cumulés</h2><small>Points</small></div>
     <div class="score-tiles">${game.players.map((name, seat) => scoreTile(name, seat, sums[seat], ranks[seat], roles)).join("")}</div>
+    ${scoreChart(game)}
     <div class="round-heading"><h2>Donnes</h2><small>${game.rounds.length} au total</small></div>
     ${game.rounds.length ? roundTable(game) : empty("♣", "À vous de jouer !", "Après la première donne, ajoute le score ici.")}
     ${finished ? "" : `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${game.rounds.length ? "" : "disabled"}>Terminer la partie</button></div>`}
+    ${finished ? `<div class="board-actions share-actions"><button class="btn primary" data-action="share-game">${icon("share")} Partager le résultat</button></div>` : ""}
   </section>`;
+}
+// Validated together as a categorical palette on the app surface; names are always shown beside them.
+const chartColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"];
+const chartBox = {width:360, height:230, left:36, right:70, top:12, bottom:24};
+const shortName = name => name.length > 9 ? name.slice(0, 8) + "…" : name;
+function scoreChart(game) {
+  chart = null;
+  const count = game.rounds.length;
+  if (count < 2) return "";
+  const series = game.players.map(() => [0]);
+  game.rounds.forEach(round => round.values.forEach((value, seat) => series[seat].push(series[seat].at(-1) + value)));
+  const {width, height, left, right, top, bottom} = chartBox;
+  const values = series.flat();
+  const rough = (Math.max(...values) - Math.min(...values) || 1) / 4;
+  const power = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 5, 10].find(factor => factor * power >= rough) * power;
+  const low = Math.floor(Math.min(...values) / step) * step;
+  const high = Math.ceil(Math.max(...values) / step) * step;
+  const x = index => left + index / count * (width - left - right);
+  const y = value => top + (high - value) / (high - low) * (height - top - bottom);
+  chart = {game, series, count, x, y};
+  const ticks = Array.from({length:Math.round((high - low) / step) + 1}, (_, index) => low + index * step);
+  const every = Math.ceil(count / 6);
+  // Keep the names at the line ends from sitting on top of each other.
+  const ends = series.map((line, seat) => ({seat, at:y(line.at(-1))})).sort((a, b) => a.at - b.at);
+  ends.forEach((end, index) => { if (index) end.at = Math.max(end.at, ends[index - 1].at + 12); });
+  const overflow = Math.max(0, ends.at(-1).at - (height - bottom + 6));
+  ends.forEach(end => { end.at -= overflow; });
+  return `<div class="round-heading"><h2>Évolution</h2><small>Points cumulés</small></div>
+  <figure class="score-chart surface">
+    <ul class="chart-legend" role="list">${game.players.map((name, seat) => `<li><span class="chart-key" style="background:${chartColors[seat]}"></span>${escape(name)}</li>`).join("")}</ul>
+    <div class="chart-plot"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Évolution des points cumulés, donne après donne. Le détail figure dans le tableau des donnes.">
+      ${ticks.map(tick => `<line class="${tick === 0 ? "chart-zero" : "chart-grid"}" x1="${left}" x2="${x(count)}" y1="${y(tick)}" y2="${y(tick)}"/><text class="chart-tick" x="${left - 6}" y="${y(tick) + 3.5}" text-anchor="end">${signed(tick)}</text>`).join("")}
+      ${Array.from({length:count}, (_, index) => index + 1).filter(round => round % every === 0 || round === count).map(round => `<text class="chart-tick" x="${x(round)}" y="${height - 6}" text-anchor="middle">${round}</text>`).join("")}
+      ${series.map((line, seat) => `<polyline class="chart-line" stroke="${chartColors[seat]}" points="${line.map((value, index) => x(index).toFixed(1) + "," + y(value).toFixed(1)).join(" ")}"/>`).join("")}
+      <line class="chart-cursor" y1="${top}" y2="${height - bottom}" hidden/>
+      ${series.map((line, seat) => `<circle class="chart-dot" data-seat="${seat}" r="4" fill="${chartColors[seat]}" cx="${x(count)}" cy="${y(line.at(-1))}"/>`).join("")}
+      ${ends.map(({seat, at}) => `<text class="chart-name" x="${x(count) + 9}" y="${(at + 3.5).toFixed(1)}">${escape(shortName(game.players[seat]))}</text>`).join("")}
+    </svg><div class="chart-tip" hidden></div></div>
+  </figure>`;
+}
+function moveChartCursor(index) {
+  const figure = app.querySelector(".score-chart");
+  if (!chart || !figure) return;
+  const cursor = figure.querySelector(".chart-cursor");
+  const tip = figure.querySelector(".chart-tip");
+  const at = index ?? chart.count;
+  cursor.toggleAttribute("hidden", index === null);
+  tip.hidden = index === null;
+  cursor.setAttribute("x1", chart.x(at));
+  cursor.setAttribute("x2", chart.x(at));
+  figure.querySelectorAll(".chart-dot").forEach(dot => {
+    dot.setAttribute("cx", chart.x(at));
+    dot.setAttribute("cy", chart.y(chart.series[dot.dataset.seat][at]));
+  });
+  if (index === null) return;
+  const rows = chart.series.map((line, seat) => ({seat, points:line[index]})).sort((a, b) => b.points - a.points);
+  tip.innerHTML = `<strong>${index ? "Après la donne " + index : "Départ"}</strong>${rows.map(({seat, points}) => `<span><i style="background:${chartColors[seat]}"></i>${escape(chart.game.players[seat])}<b>${signed(points)}</b></span>`).join("")}`;
+  const share = chart.x(index) / chartBox.width;
+  tip.style.left = share < .5 ? "calc(" + share * 100 + "% + 10px)" : "auto";
+  tip.style.right = share < .5 ? "auto" : "calc(" + (1 - share) * 100 + "% + 10px)";
+}
+function followChart(event) {
+  const plot = event.target.closest?.(".chart-plot svg");
+  if (!plot || !chart) return;
+  const box = plot.getBoundingClientRect();
+  const position = (event.clientX - box.left) / box.width * chartBox.width;
+  const index = Math.round((position - chartBox.left) / (chart.x(chart.count) - chartBox.left) * chart.count);
+  moveChartCursor(Math.min(chart.count, Math.max(0, index)));
+}
+app.addEventListener("pointermove", followChart);
+app.addEventListener("pointerdown", followChart);
+app.addEventListener("pointerleave", event => {
+  if (event.target.matches?.(".chart-plot svg") && event.pointerType === "mouse") moveChartCursor(null);
+}, true);
+
+function shareText(game) {
+  const sums = totals(game);
+  const ranks = ranksFor(sums);
+  const lines = sums.map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points)
+    .map(({points, seat}) => ranks[seat] + (ranks[seat] === 1 ? "er" : "e") + " " + game.players[seat] + " " + signed(points));
+  return "Whist du " + formatDate(game.finished) + "\n" + lines.join("\n") + "\n" + game.rounds.length + " donne" + plural(game.rounds.length);
+}
+function shareImage(game) {
+  const sums = totals(game);
+  const ranks = ranksFor(sums);
+  const rows = sums.map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points);
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = 470 + rows.length * 150;
+  const pen = canvas.getContext("2d");
+  const font = (size, weight = 700) => { pen.font = weight + " " + size + "px system-ui, -apple-system, sans-serif"; };
+  pen.fillStyle = "#faf4e8";
+  pen.fillRect(0, 0, canvas.width, canvas.height);
+  pen.fillStyle = "#28533f";
+  pen.fillRect(0, 0, canvas.width, 330);
+  pen.fillStyle = "#f6ca69";
+  font(46);
+  pen.fillText("♠ Carnet de Whist", 70, 110);
+  pen.fillStyle = "#fff9e9";
+  font(92, 800);
+  pen.fillText("Partie terminée", 70, 220);
+  pen.fillStyle = "#ecdfc5";
+  font(40, 500);
+  pen.fillText(formatDate(game.finished) + " · " + game.rounds.length + " donne" + plural(game.rounds.length), 70, 285);
+  rows.forEach(({points, seat}, index) => {
+    const top = 380 + index * 150;
+    pen.fillStyle = "#fffaf1";
+    pen.strokeStyle = "#ded1b9";
+    pen.lineWidth = 3;
+    pen.beginPath();
+    pen.roundRect(60, top, 960, 126, 28);
+    pen.fill();
+    pen.stroke();
+    pen.fillStyle = "#5d5f50";
+    font(44);
+    pen.textAlign = "left";
+    pen.fillText(ranks[seat] + (ranks[seat] === 1 ? "er" : "e"), 96, top + 80);
+    const score = signed(points);
+    font(64, 800);
+    pen.fillStyle = points > 0 ? "#236044" : points < 0 ? "#a13e34" : "#23332b";
+    pen.textAlign = "right";
+    pen.fillText(score, 984, top + 86);
+    const room = 984 - pen.measureText(score).width - 40 - 210;
+    pen.fillStyle = "#23332b";
+    font(56);
+    pen.textAlign = "left";
+    let name = game.players[seat];
+    while (name.length > 1 && pen.measureText(name).width > room) name = name.slice(0, -2) + "…";
+    pen.fillText(name, 210, top + 84);
+  });
+  return new Promise(resolve => canvas.toBlob(blob => resolve(blob && new File([blob], "whist.png", {type:"image/png"})), "image/png"));
+}
+async function shareGame(game) {
+  const text = shareText(game);
+  try {
+    const file = await shareImage(game).catch(() => null);
+    if (file && navigator.canShare?.({files:[file]})) await navigator.share({files:[file], text});
+    else if (navigator.share) await navigator.share({text});
+    else {
+      await navigator.clipboard.writeText(text);
+      tell("Résultat copié, prêt à coller.");
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    try {
+      await navigator.clipboard.writeText(text);
+      tell("Résultat copié, prêt à coller.");
+    } catch { tell("Le partage n’est pas disponible sur cet appareil."); }
+  }
 }
 function roundTable(game) {
   return `<div class="surface score-table-wrap"><table class="score-table" aria-label="Points par donne"><thead><tr><th scope="col">Contrat</th>${game.players.map((name, seat) => `<th scope="col">${avatar(seat)}<span>${escape(name)}</span></th>`).join("")}</tr></thead>
@@ -322,17 +477,31 @@ function playerProfile() {
     ${records.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Résultats par contrat"><thead><tr><th>Contrat</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th><th>Points</th></tr></thead><tbody>${records.map(([id,record]) => `<tr><th scope="row">${escape(byId[id].label)}<small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td><td class="${color(record.points)}">${signed(record.points)}</td></tr>`).join("")}</tbody></table></div>` : empty("♠","Aucun contrat joué","Ses résultats apparaîtront après sa première annonce.")}
   </section>`;
 }
+const average = record => signed(Math.round(record.points / record.games * 10) / 10).replace(".", ",");
 function statisticsPage() {
-  const ranking = data.roster.map(player => ({player,record:playerStatistics(data,player.id).contracts[statsContract]}))
-    .filter(item => item.record).sort((a,b) => {
-      const value = record => statsOrder === "rate" ? record.wins / record.attempts : record[statsOrder];
-      return value(b.record) - value(a.record) || b.record.attempts - a.record.attempts || a.player.nickname.localeCompare(b.player.nickname,"fr-BE");
+  const overall = statsContract === "all";
+  const order = overall ? overallOrder : statsOrder;
+  const byName = (a, b) => a.player.nickname.localeCompare(b.player.nickname, "fr-BE");
+  const general = overallStatistics(data);
+  const ranking = data.roster.map(player => ({player,
+    record:overall ? general.get(player.id) : playerStatistics(data, player.id).contracts[statsContract]}))
+    .filter(item => item.record).sort((a, b) => {
+      const value = record => order === "rate" ? record.wins / record.attempts
+        : order === "average" ? record.points / record.games : record[order];
+      return value(b.record) - value(a.record) || (overall ? b.record.games - a.record.games : b.record.attempts - a.record.attempts) || byName(a, b);
     });
-  return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Classements","Qui réussit ses misères ? Qui rate ses trous ?")}
-    <div class="stats-filters"><label>Contrat<select id="stats-contract">${contracts.map(contract => `<option value="${contract.id}" ${statsContract === contract.id ? "selected" : ""}>${escape(contract.label)}</option>`).join("")}</select></label>
-    <label>Classer par<select id="stats-order">${[["wins","Plus de contrats gagnés"],["losses","Plus de contrats perdus"],["rate","Meilleur taux de réussite"]].map(([value,label]) => `<option value="${value}" ${statsOrder === value ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
-    <p class="hint">Le taux de réussite porte uniquement sur les annonces de chaque joueur. Le nombre de tentatives permet de comparer leur expérience.</p>
-    ${ranking.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Classement par contrat"><thead><tr><th>Joueur</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th></tr></thead><tbody>${ranking.map(({player,record}) => `<tr><th scope="row"><button class="text-action" data-action="view-player" data-value="${escape(player.id)}">${escape(player.nickname)}</button><small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td></tr>`).join("")}</tbody></table></div>` : empty("♣","Aucune annonce pour ce contrat","Personne n’a encore tenté ce contrat.")}
+  const orders = overall
+    ? [["wins","Plus de victoires"],["points","Plus de points"],["average","Meilleure moyenne par partie"],["games","Plus de parties jouées"]]
+    : [["wins","Plus de contrats gagnés"],["losses","Plus de contrats perdus"],["rate","Meilleur taux de réussite"]];
+  const who = ({player}) => `<button class="text-action" data-action="view-player" data-value="${escape(player.id)}">${escape(player.nickname)}</button>`;
+  const table = overall
+    ? `<table class="rule-table stats-table" aria-label="Classement général"><thead><tr><th>Joueur</th><th>Victoires</th><th>Points</th><th>Moyenne</th></tr></thead><tbody>${ranking.map(item => `<tr><th scope="row">${who(item)}<small>${item.record.games} partie${plural(item.record.games)}</small></th><td>${item.record.wins}</td><td class="${color(item.record.points)}">${signed(item.record.points)}</td><td class="${color(item.record.points)}">${average(item.record)}</td></tr>`).join("")}</tbody></table>`
+    : `<table class="rule-table stats-table" aria-label="Classement par contrat"><thead><tr><th>Joueur</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th></tr></thead><tbody>${ranking.map(item => `<tr><th scope="row">${who(item)}<small>${item.record.attempts} tentative${plural(item.record.attempts)}</small></th><td>${item.record.wins}</td><td>${item.record.losses}</td><td>${successRate(item.record)}</td></tr>`).join("")}</tbody></table>`;
+  return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Classements","Qui gagne le plus ? Qui réussit ses misères ?")}
+    <div class="stats-filters"><label>Classement<select id="stats-contract"><option value="all" ${overall ? "selected" : ""}>Général, toutes les parties</option>${contracts.map(contract => `<option value="${contract.id}" ${statsContract === contract.id ? "selected" : ""}>${escape(contract.label)}</option>`).join("")}</select></label>
+    <label>Classer par<select id="stats-order">${orders.map(([value,label]) => `<option value="${value}" ${order === value ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
+    <p class="hint">${overall ? "Seules les parties terminées comptent. Une victoire est une première place, ex æquo compris. La moyenne est le nombre de points par partie." : "Le taux de réussite porte uniquement sur les annonces de chaque joueur. Le nombre de tentatives permet de comparer leur expérience."}</p>
+    ${ranking.length ? `<div class="rule-table-wrap surface">${table}</div>` : overall ? empty("♣","Aucune partie terminée","Le classement apparaîtra après la première partie terminée.") : empty("♣","Aucune annonce pour ce contrat","Personne n’a encore tenté ce contrat.")}
   </section>`;
 }
 function editPlayer(id = "") {
@@ -367,16 +536,10 @@ function ruleInput(items, fields, sign, label) {
 }
 function ruleRow(contract) {
   const {label, target, bonus, id} = contract;
-  const sharedBase = bonus != null && ruleValue(contract, "win") === ruleValue(contract, "loss");
-  const sharedStep = bonus != null && ruleValue(contract, "bonus") === ruleValue(contract, "penalty");
-  const base = ruleInput([contract], sharedBase ? ["win","loss"] : ["win"], sharedBase ? "±" : "+", label + ", Points");
-  const loss = sharedBase ? "" : ruleInput([contract], ["loss"], "−", label + ", Perdu");
-  let step = "";
-  if (sharedStep) step = ruleInput([contract], ["bonus","penalty"], "±", label + ", Par pli");
-  else if (bonus != null) {
-    step = ruleInput([contract], ["bonus"], "+", label + ", Pli en plus") +
-      ruleInput([contract], ["penalty"], "−", label + ", Pli manquant");
-  }
+  const base = ruleInput([contract], ["win"], "+", label + ", Gagné");
+  const loss = ruleInput([contract], ["loss"], "−", label + ", Perdu");
+  const step = bonus == null ? "" : ruleInput([contract], ["bonus"], "+", label + ", Pli en plus") +
+    ruleInput([contract], ["penalty"], "−", label + ", Pli manquant");
   const goal = target === 0 ? "Pas de pli" : target + " pli" + plural(target);
   return `<tr class="${id === "piccolo" ? "piccolo-row" : ""}"><th scope="row">${label}<small>${goal}</small></th><td>${base}</td><td>${step}</td><td>${loss}</td></tr>`;
 }
@@ -401,9 +564,9 @@ function rules() {
       <label for="piccolo"><strong>Piccolo</strong><small>Contrat à exactement un pli.</small></label>
       <input type="checkbox" role="switch" id="piccolo" name="piccolo" ${data.piccolo ? "checked" : ""}>
     </div>
-    <p class="body-copy">Les points s’appliquent à chaque joueur du duo ou au déclarant en solo. Le signe ± indique la valeur de base en gain et en perte. Pour un Solo 6, 7 ou 8, les bonus s’arrêtent au huitième pli.</p>
+    <p class="body-copy">Les points s’appliquent à chaque joueur du duo ou au déclarant en solo. « Gagné » et « Perdu » sont les points de base. « Par pli » ajoute + pour chaque pli en plus d’un contrat gagné, et − pour chaque pli manquant d’un contrat perdu. Pour un Solo 6, 7 ou 8, les bonus s’arrêtent au huitième pli.</p>
     <div class="rule-table-wrap surface"><table class="rule-table" aria-label="Grille de points">
-      <thead><tr><th scope="col">Contrat</th><th scope="col">Points</th><th scope="col">Par pli</th><th scope="col">Si perdu</th></tr></thead>
+      <thead><tr><th scope="col">Contrat</th><th scope="col">Gagné</th><th scope="col">Par pli</th><th scope="col">Perdu</th></tr></thead>
       ${groups.map(rows => `<tbody>${rows}</tbody>`).join("")}
     </table></div>
     <div class="page-actions"><button class="btn secondary" type="button" data-action="reset-rules">Valeurs par défaut</button><button class="btn primary" type="submit">Enregistrer le barème</button></div></form>
@@ -713,6 +876,7 @@ const actions = {
     go("home", true);
     tell("Partie annulée.");
   },
+  "share-game"() { if (viewedGame) void shareGame(viewedGame); },
   "delete-game"() {
     ask("Supprimer cette partie ?", "Elle sera retirée de l’historique, des fiches joueurs et des classements. Cette action est définitive.", "confirm-delete-game", "Supprimer la partie", "Garder la partie");
   },
@@ -839,6 +1003,7 @@ app.addEventListener("change", event => {
   if (["stats-contract","stats-order"].includes(event.target.id)) {
     const id = event.target.id;
     if (id === "stats-contract") statsContract = event.target.value;
+    else if (statsContract === "all") overallOrder = event.target.value;
     else statsOrder = event.target.value;
     render();
     app.querySelector("#" + id).focus({preventScroll:true});
