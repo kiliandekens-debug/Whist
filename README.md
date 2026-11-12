@@ -5,8 +5,9 @@
 `SUPABASE_PUBLISHABLE_KEY`. La clé publique Supabase est destinée au navigateur.
 Les clés serveur et les identifiants de connexion restent hors du dépôt.
 
-L’entrée Vercel `vercel/auth.mjs` connecte le propriétaire par lien e-mail avec
-PKCE, puis charge le carnet. Ajouter l’URL Vercel exacte et le domaine final
+L’entrée Vercel `vercel/auth.mjs` connecte le propriétaire par mot de passe, ou
+par lien e-mail avec PKCE, puis charge le carnet. Le compte et son mot de passe
+se créent dans Supabase Auth. Ajouter l’URL Vercel exacte et le domaine final
 aux Redirect URLs de Supabase Auth. Les e-mails nécessitent un expéditeur
 configuré ou une adresse autorisée par le service SMTP par défaut de Supabase.
 

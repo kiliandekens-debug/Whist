@@ -23,39 +23,67 @@ function forgetUser() {
 }
 
 function showLogin(message = "Retrouve tes parties et tes scores sur tous tes appareils.") {
+  const field = "display:block;width:100%;min-height:52px;margin:12px 0 24px;padding:12px;font:inherit;border:1px solid #b8c2b8;border-radius:12px;box-sizing:border-box";
   app.innerHTML = `<section class="wrap narrow page">
     <div class="page-head"><h1>On se fait un whist ?</h1><p id="login-message"></p></div>
     <form id="login-form" class="surface" style="padding:clamp(20px,5vw,36px)">
       <label for="login-email">Ton adresse e-mail</label>
-      <input id="login-email" type="email" autocomplete="email" inputmode="email" required maxlength="254"
-        placeholder="prenom@exemple.be" style="display:block;width:100%;min-height:52px;margin:12px 0 24px;padding:12px;font:inherit;border:1px solid #b8c2b8;border-radius:12px;box-sizing:border-box">
-      <button class="btn primary" type="submit">Recevoir mon lien de connexion</button>
+      <input id="login-email" type="email" autocomplete="username" inputmode="email" required maxlength="254"
+        placeholder="prenom@exemple.be" style="${field}">
+      <label for="login-password">Ton mot de passe</label>
+      <input id="login-password" type="password" autocomplete="current-password" maxlength="200" style="${field}">
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <button class="btn primary" type="submit">Se connecter</button>
+        <button class="btn secondary" type="button" id="login-link">Recevoir un lien par e-mail</button>
+      </div>
       <p id="login-status" role="status" aria-live="polite" style="margin-top:20px"></p>
     </form>
-    <p class="hint">Ouvre le lien dans le navigateur utilisé pour cette demande.</p>
+    <p class="hint">Si tu demandes un lien, ouvre-le dans le navigateur utilisé pour cette demande.</p>
     ${config.preview ? '<p class="hint">Les parties jouées dans cet aperçu restent ici.</p>' : ""}
   </section>`;
   document.querySelector("#login-message").textContent = message;
-  document.querySelector("#login-form").addEventListener("submit", async event => {
-    event.preventDefault();
-    const button = event.target.querySelector("button");
-    const status = document.querySelector("#login-status");
-    button.disabled = true;
-    status.textContent = "Envoi du lien…";
+  const form = document.querySelector("#login-form");
+  const status = document.querySelector("#login-status");
+  const email = () => document.querySelector("#login-email").value.trim();
+  async function attempt(waiting, action) {
+    const buttons = form.querySelectorAll("button");
+    buttons.forEach(button => {button.disabled = true;});
+    status.textContent = waiting;
     try {
-      // The notebook belongs to one owner: never create accounts for other addresses.
-      const {error} = await client.auth.signInWithOtp({
-        email:document.querySelector("#login-email").value.trim(),
-        options:{emailRedirectTo:location.origin + "/",shouldCreateUser:false},
-      });
-      status.textContent = error
-        ? "Le lien n’a pas pu être envoyé. Vérifie ton adresse et réessaie dans un instant."
-        : "Le lien est envoyé. Consulte ta boîte mail et tes courriers indésirables.";
+      status.textContent = await action();
     } catch {
       status.textContent = "Connexion interrompue. Réessaie quand le réseau est disponible.";
     } finally {
-      button.disabled = false;
+      buttons.forEach(button => {button.disabled = false;});
     }
+  }
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const password = document.querySelector("#login-password").value;
+    if (!password) {
+      status.textContent = "Saisis ton mot de passe, ou demande un lien par e-mail.";
+      return;
+    }
+    void attempt("Connexion…", async () => {
+      const {error} = await client.auth.signInWithPassword({email:email(), password});
+      if (!error) return "Chargement de ton carnet…";
+      return error.name === "AuthRetryableFetchError"
+        ? "Connexion interrompue. Réessaie quand le réseau est disponible."
+        : "Adresse ou mot de passe incorrect.";
+    });
+  });
+  document.querySelector("#login-link").addEventListener("click", () => {
+    if (!form.querySelector("#login-email").reportValidity()) return;
+    void attempt("Envoi du lien…", async () => {
+      // The notebook belongs to one owner: never create accounts for other addresses.
+      const {error} = await client.auth.signInWithOtp({
+        email:email(),
+        options:{emailRedirectTo:location.origin + "/",shouldCreateUser:false},
+      });
+      return error
+        ? "Le lien n’a pas pu être envoyé. Vérifie ton adresse et réessaie dans un instant."
+        : "Le lien est envoyé. Consulte ta boîte mail et tes courriers indésirables.";
+    });
   });
 }
 

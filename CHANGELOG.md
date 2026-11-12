@@ -7,6 +7,11 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.2.0 — 2026-11-12
+
+### Ajouté
+- Connexion par adresse e-mail et mot de passe. Le lien par e-mail reste disponible.
+
 ## 1.1.0 — 2026-11-12
 
 ### Ajouté
