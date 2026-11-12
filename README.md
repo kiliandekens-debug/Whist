@@ -6,8 +6,8 @@
 Les clés serveur et les identifiants de connexion restent hors du dépôt.
 
 L’entrée Vercel `vercel/auth.mjs` connecte le propriétaire par mot de passe, ou
-par lien e-mail avec PKCE, puis charge le carnet. Le compte et son mot de passe
-se créent dans Supabase Auth. Ajouter l’URL Vercel exacte et le domaine final
+par lien e-mail avec PKCE, puis charge le carnet. Le premier lien crée le compte ; le
+mot de passe se choisit ensuite dans l’application. Ajouter l’URL Vercel exacte et le domaine final
 aux Redirect URLs de Supabase Auth. Les e-mails nécessitent un expéditeur
 configuré ou une adresse autorisée par le service SMTP par défaut de Supabase.
 
@@ -27,9 +27,8 @@ il répond, la copie ne sert que sans connexion. Sur Vercel, le carnet s’ouvre
 alors avec les données de l’appareil, pour le dernier compte qui s’y est
 connecté, et les modifications partent dès le retour du réseau.
 
-En cas de conflit entre deux appareils, on choisit la version à garder. La
-connexion par e-mail ne crée pas de compte : celui du propriétaire doit exister
-dans Supabase Auth.
+En cas de conflit entre deux appareils, on choisit la version à garder. Seule
+l’adresse du propriétaire, inscrite dans `whist_account_access`, ouvre le carnet.
 
 ## Tests
 

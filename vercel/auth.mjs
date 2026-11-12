@@ -75,10 +75,10 @@ function showLogin(message = "Retrouve tes parties et tes scores sur tous tes ap
   document.querySelector("#login-link").addEventListener("click", () => {
     if (!form.querySelector("#login-email").reportValidity()) return;
     void attempt("Envoi du lien…", async () => {
-      // The notebook belongs to one owner: never create accounts for other addresses.
+      // The first link creates the account. Only the owner's address can open the notebook.
       const {error} = await client.auth.signInWithOtp({
         email:email(),
-        options:{emailRedirectTo:location.origin + "/",shouldCreateUser:false},
+        options:{emailRedirectTo:location.origin + "/",shouldCreateUser:true},
       });
       return error
         ? "Le lien n’a pas pu être envoyé. Vérifie ton adresse et réessaie dans un instant."
@@ -102,6 +102,41 @@ async function getAccessToken() {
   return session.access_token;
 }
 
+// Lets the signed-in owner choose the password used by the sign-in form.
+function choosePassword() {
+  const dialog = document.querySelector("#dialog");
+  dialog.innerHTML = `<header class="dialog-head"><div><h2 id="dialog-title">Mot de passe</h2></div><button class="dialog-close" data-action="close" aria-label="Fermer">×</button></header>
+    <form id="password-form"><div class="dialog-main">
+      <label>Nouveau mot de passe<input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+      <p class="hint">Au moins 8 caractères. Il servira à te connecter sans attendre un e-mail.</p>
+      <p class="error" role="alert" hidden></p></div>
+    <div class="dialog-actions"><button type="button" class="btn secondary" data-action="close">Annuler</button><button type="submit" class="btn primary">Enregistrer</button></div></form>`;
+  const form = dialog.querySelector("form");
+  const problem = form.querySelector(".error");
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    problem.hidden = true;
+    let failed = true;
+    try {
+      const {error} = await client.auth.updateUser({password:form.elements.password.value});
+      failed = !!error;
+    } catch {}
+    if (failed) {
+      problem.textContent = "Le mot de passe n’a pas pu être enregistré. Vérifie ta connexion, ou choisis-en un plus long.";
+      problem.hidden = false;
+      button.disabled = false;
+      return;
+    }
+    dialog.close();
+    document.querySelector("#toast").textContent = "Mot de passe enregistré.";
+    setTimeout(() => {document.querySelector("#toast").textContent = "";}, 3200);
+  });
+  if (!dialog.open) dialog.showModal();
+  form.elements.password.focus();
+}
+
 // Opens the notebook. Without `initial`, the app starts from the copy kept on this device.
 async function launch(userId, initial) {
   if (loadedUser) return;
@@ -121,7 +156,11 @@ async function launch(userId, initial) {
     forgetUser();
     location.reload();
   });
-  document.querySelector(".cloud-controls").append(logout);
+  const password = document.createElement("button");
+  password.type = "button";
+  password.textContent = "Mot de passe";
+  password.addEventListener("click", choosePassword);
+  document.querySelector(".cloud-controls").append(password, logout);
   await import("./app.mjs");
 }
 
