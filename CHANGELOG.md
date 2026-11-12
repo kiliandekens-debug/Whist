@@ -7,6 +7,15 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.2.0 — 2026-11-12
+
+### Ajouté
+- Connexion par adresse e-mail et mot de passe. Le lien par e-mail reste disponible.
+- Bouton « Mot de passe » en bas de page pour choisir ou changer son mot de passe.
+
+### Corrigé
+- Le lien par e-mail fonctionne à nouveau pour une première connexion.
+
 ## 1.1.0 — 2026-11-12
 
 ### Ajouté

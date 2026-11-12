@@ -23,39 +23,67 @@ function forgetUser() {
 }
 
 function showLogin(message = "Retrouve tes parties et tes scores sur tous tes appareils.") {
+  const field = "display:block;width:100%;min-height:52px;margin:12px 0 24px;padding:12px;font:inherit;border:1px solid #b8c2b8;border-radius:12px;box-sizing:border-box";
   app.innerHTML = `<section class="wrap narrow page">
     <div class="page-head"><h1>On se fait un whist ?</h1><p id="login-message"></p></div>
     <form id="login-form" class="surface" style="padding:clamp(20px,5vw,36px)">
       <label for="login-email">Ton adresse e-mail</label>
-      <input id="login-email" type="email" autocomplete="email" inputmode="email" required maxlength="254"
-        placeholder="prenom@exemple.be" style="display:block;width:100%;min-height:52px;margin:12px 0 24px;padding:12px;font:inherit;border:1px solid #b8c2b8;border-radius:12px;box-sizing:border-box">
-      <button class="btn primary" type="submit">Recevoir mon lien de connexion</button>
+      <input id="login-email" type="email" autocomplete="username" inputmode="email" required maxlength="254"
+        placeholder="prenom@exemple.be" style="${field}">
+      <label for="login-password">Ton mot de passe</label>
+      <input id="login-password" type="password" autocomplete="current-password" maxlength="200" style="${field}">
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <button class="btn primary" type="submit">Se connecter</button>
+        <button class="btn secondary" type="button" id="login-link">Recevoir un lien par e-mail</button>
+      </div>
       <p id="login-status" role="status" aria-live="polite" style="margin-top:20px"></p>
     </form>
-    <p class="hint">Ouvre le lien dans le navigateur utilisé pour cette demande.</p>
+    <p class="hint">Si tu demandes un lien, ouvre-le dans le navigateur utilisé pour cette demande.</p>
     ${config.preview ? '<p class="hint">Les parties jouées dans cet aperçu restent ici.</p>' : ""}
   </section>`;
   document.querySelector("#login-message").textContent = message;
-  document.querySelector("#login-form").addEventListener("submit", async event => {
-    event.preventDefault();
-    const button = event.target.querySelector("button");
-    const status = document.querySelector("#login-status");
-    button.disabled = true;
-    status.textContent = "Envoi du lien…";
+  const form = document.querySelector("#login-form");
+  const status = document.querySelector("#login-status");
+  const email = () => document.querySelector("#login-email").value.trim();
+  async function attempt(waiting, action) {
+    const buttons = form.querySelectorAll("button");
+    buttons.forEach(button => {button.disabled = true;});
+    status.textContent = waiting;
     try {
-      // The notebook belongs to one owner: never create accounts for other addresses.
-      const {error} = await client.auth.signInWithOtp({
-        email:document.querySelector("#login-email").value.trim(),
-        options:{emailRedirectTo:location.origin + "/",shouldCreateUser:false},
-      });
-      status.textContent = error
-        ? "Le lien n’a pas pu être envoyé. Vérifie ton adresse et réessaie dans un instant."
-        : "Le lien est envoyé. Consulte ta boîte mail et tes courriers indésirables.";
+      status.textContent = await action();
     } catch {
       status.textContent = "Connexion interrompue. Réessaie quand le réseau est disponible.";
     } finally {
-      button.disabled = false;
+      buttons.forEach(button => {button.disabled = false;});
     }
+  }
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    const password = document.querySelector("#login-password").value;
+    if (!password) {
+      status.textContent = "Saisis ton mot de passe, ou demande un lien par e-mail.";
+      return;
+    }
+    void attempt("Connexion…", async () => {
+      const {error} = await client.auth.signInWithPassword({email:email(), password});
+      if (!error) return "Chargement de ton carnet…";
+      return error.name === "AuthRetryableFetchError"
+        ? "Connexion interrompue. Réessaie quand le réseau est disponible."
+        : "Adresse ou mot de passe incorrect.";
+    });
+  });
+  document.querySelector("#login-link").addEventListener("click", () => {
+    if (!form.querySelector("#login-email").reportValidity()) return;
+    void attempt("Envoi du lien…", async () => {
+      // The first link creates the account. Only the owner's address can open the notebook.
+      const {error} = await client.auth.signInWithOtp({
+        email:email(),
+        options:{emailRedirectTo:location.origin + "/",shouldCreateUser:true},
+      });
+      return error
+        ? "Le lien n’a pas pu être envoyé. Vérifie ton adresse et réessaie dans un instant."
+        : "Le lien est envoyé. Consulte ta boîte mail et tes courriers indésirables.";
+    });
   });
 }
 
@@ -72,6 +100,41 @@ async function getAccessToken() {
   if (error?.name === "AuthRetryableFetchError") throw Error("Offline");
   if (error || !session || session.user.id !== loadedUser) throw Object.assign(Error("Session expired"), {code:"session"});
   return session.access_token;
+}
+
+// Lets the signed-in owner choose the password used by the sign-in form.
+function choosePassword() {
+  const dialog = document.querySelector("#dialog");
+  dialog.innerHTML = `<header class="dialog-head"><div><h2 id="dialog-title">Mot de passe</h2></div><button class="dialog-close" data-action="close" aria-label="Fermer">×</button></header>
+    <form id="password-form"><div class="dialog-main">
+      <label>Nouveau mot de passe<input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+      <p class="hint">Au moins 8 caractères. Il servira à te connecter sans attendre un e-mail.</p>
+      <p class="error" role="alert" hidden></p></div>
+    <div class="dialog-actions"><button type="button" class="btn secondary" data-action="close">Annuler</button><button type="submit" class="btn primary">Enregistrer</button></div></form>`;
+  const form = dialog.querySelector("form");
+  const problem = form.querySelector(".error");
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    problem.hidden = true;
+    let failed = true;
+    try {
+      const {error} = await client.auth.updateUser({password:form.elements.password.value});
+      failed = !!error;
+    } catch {}
+    if (failed) {
+      problem.textContent = "Le mot de passe n’a pas pu être enregistré. Vérifie ta connexion, ou choisis-en un plus long.";
+      problem.hidden = false;
+      button.disabled = false;
+      return;
+    }
+    dialog.close();
+    document.querySelector("#toast").textContent = "Mot de passe enregistré.";
+    setTimeout(() => {document.querySelector("#toast").textContent = "";}, 3200);
+  });
+  if (!dialog.open) dialog.showModal();
+  form.elements.password.focus();
 }
 
 // Opens the notebook. Without `initial`, the app starts from the copy kept on this device.
@@ -93,7 +156,11 @@ async function launch(userId, initial) {
     forgetUser();
     location.reload();
   });
-  document.querySelector(".cloud-controls").append(logout);
+  const password = document.createElement("button");
+  password.type = "button";
+  password.textContent = "Mot de passe";
+  password.addEventListener("click", choosePassword);
+  document.querySelector(".cloud-controls").append(password, logout);
   await import("./app.mjs");
 }
 
