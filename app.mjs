@@ -7,12 +7,15 @@ const dialog = document.querySelector("#dialog");
 const toast = document.querySelector("#toast");
 const storageKey = document.body.dataset.storageKey || "carnet-whist-v1";
 const defaults = {active:null, history:[], groups:[], last:null, overrides:{}, piccolo:false, roster:[], lastPlayerIds:null};
+// A follow link shows one notebook read-only: nothing is read from or written to this device.
+const viewer = document.body.dataset.viewer === "true";
+const watched = state => ({active:state?.active ?? null, history:state?.last ? [state.last] : []});
 let saved = {};
-try {
+if (!viewer) try {
   saved = JSON.parse(localStorage.getItem(storageKey) || "{}") ?? {};
 } catch {}
 const {_supabase: syncMeta, ...savedGame} = saved;
-let data = normalize(savedGame);
+let data = normalize(viewer ? watched(window.whistViewer?.state) : savedGame);
 function normalize(snapshot) {
   const state = {...defaults, ...snapshot};
   if (state.active && !state.active.scoringVersion) {
@@ -120,6 +123,7 @@ function persist(snapshot) {
   catch { tell("Le navigateur ne peut pas sauvegarder cette partie."); }
 }
 function save() {
+  if (viewer) return;
   if (cloud) cloud.save();
   else persist(data);
 }
@@ -168,7 +172,7 @@ function openPath() {
   go(next,true);
 }
 function render() {
-  const screens = {home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
+  const screens = {watch:watchView, home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
   app.innerHTML = screens[page]();
   document.querySelectorAll("[data-nav]").forEach(button => {
     if (button.dataset.nav === page) button.setAttribute("aria-current", "page");
@@ -236,6 +240,11 @@ function roleStrip(game, index) {
   </div>`;
 }
 function board() {return gameView(data.active, false);}
+function watchView() {
+  if (data.active) return gameView(data.active, false);
+  if (data.history[0]) return gameView(data.history[0], true);
+  return `<section class="wrap narrow page">${head("Suivi en direct", "Les scores de la table, mis à jour tout seuls.")}${empty("♣", "Aucune partie en cours", "Les scores apparaîtront ici dès qu’une partie commence.")}</section>`;
+}
 function archive() {return gameView(viewedGame, true);}
 function scoreTile(name, seat, points, rank, roles) {
   let role = "";
@@ -257,7 +266,7 @@ function gameView(game, finished) {
   const leaders = game.players.filter((_, index) => ranks[index] === 1);
   const heading = finished ? "Partie terminée" : "Tour " + (game.rounds.length + 1);
   return `<section class="board-hero"><div class="wrap"><div class="board-nav">
-    ${finished ? `${back("history", "Historique")}<button class="board-cancel" type="button" data-action="delete-game">Supprimer la partie</button>` : `${back("home")}<button class="board-cancel" type="button" data-action="cancel-game">Annuler la partie</button>`}
+    ${viewer ? '<span class="live-badge"><i aria-hidden="true"></i>Suivi en direct</span>' : finished ? `${back("history", "Historique")}<button class="board-cancel" type="button" data-action="delete-game">Supprimer la partie</button>` : `${back("home")}<button class="board-cancel" type="button" data-action="cancel-game">Annuler la partie</button>`}
   </div><div class="board-top">
     <div><span class="eyebrow">${finished ? formatDate(game.finished) : "Feuille de score, " + game.players.length + " joueurs"}</span><h1>${heading}</h1></div>
     ${finished ? `<div class="board-leader">${icon("scores")}<span>${leaders.length > 1 ? "En tête ex æquo" : "En tête"}<strong>${leaders.map(escape).join(", ")}</strong></span></div>` : '<div class="board-emblem" aria-hidden="true"><span>♦</span><span>♠</span></div>'}
@@ -268,12 +277,14 @@ function gameView(game, finished) {
     ${scoreChart(game)}
     <div class="round-heading"><h2>Donnes</h2><small>${game.rounds.length} au total</small></div>
     ${game.rounds.length ? roundTable(game) : empty("♣", "À vous de jouer !", "Après la première donne, ajoute le score ici.")}
-    ${finished ? "" : `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${game.rounds.length ? "" : "disabled"}>Terminer la partie</button></div>`}
-    ${finished ? `<div class="board-actions share-actions"><button class="btn primary" data-action="share-game">${icon("share")} Partager le résultat</button></div>` : ""}
+    ${finished || viewer ? "" : `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${game.rounds.length ? "" : "disabled"}>Terminer la partie</button></div>`}
+    ${finished && !viewer ? `<div class="board-actions share-actions"><button class="btn primary" data-action="share-game">${icon("share")} Partager le résultat</button></div>` : ""}
   </section>`;
 }
 // Validated together as a categorical palette on the app surface; names are always shown beside them.
+// The picture to share keeps these light values; on screen the theme supplies --series-0 to --series-4.
 const chartColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"];
+const seriesColor = seat => "var(--series-" + seat + ")";
 const chartBox = {width:360, height:230, left:36, right:70, top:12, bottom:24};
 const shortName = name => name.length > 9 ? name.slice(0, 8) + "…" : name;
 function scoreChart(game) {
@@ -301,13 +312,13 @@ function scoreChart(game) {
   ends.forEach(end => { end.at -= overflow; });
   return `<div class="round-heading"><h2>Évolution</h2><small>Points cumulés</small></div>
   <figure class="score-chart surface">
-    <ul class="chart-legend" role="list">${game.players.map((name, seat) => `<li><span class="chart-key" style="background:${chartColors[seat]}"></span>${escape(name)}</li>`).join("")}</ul>
+    <ul class="chart-legend" role="list">${game.players.map((name, seat) => `<li><span class="chart-key" style="background:${seriesColor(seat)}"></span>${escape(name)}</li>`).join("")}</ul>
     <div class="chart-plot"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Évolution des points cumulés, donne après donne. Le détail figure dans le tableau des donnes.">
       ${ticks.map(tick => `<line class="${tick === 0 ? "chart-zero" : "chart-grid"}" x1="${left}" x2="${x(count)}" y1="${y(tick)}" y2="${y(tick)}"/><text class="chart-tick" x="${left - 6}" y="${y(tick) + 3.5}" text-anchor="end">${signed(tick)}</text>`).join("")}
       ${Array.from({length:count}, (_, index) => index + 1).filter(round => round % every === 0 || round === count).map(round => `<text class="chart-tick" x="${x(round)}" y="${height - 6}" text-anchor="middle">${round}</text>`).join("")}
-      ${series.map((line, seat) => `<polyline class="chart-line" stroke="${chartColors[seat]}" points="${line.map((value, index) => x(index).toFixed(1) + "," + y(value).toFixed(1)).join(" ")}"/>`).join("")}
+      ${series.map((line, seat) => `<polyline class="chart-line" style="stroke:${seriesColor(seat)}" points="${line.map((value, index) => x(index).toFixed(1) + "," + y(value).toFixed(1)).join(" ")}"/>`).join("")}
       <line class="chart-cursor" y1="${top}" y2="${height - bottom}" hidden/>
-      ${series.map((line, seat) => `<circle class="chart-dot" data-seat="${seat}" r="4" fill="${chartColors[seat]}" cx="${x(count)}" cy="${y(line.at(-1))}"/>`).join("")}
+      ${series.map((line, seat) => `<circle class="chart-dot" data-seat="${seat}" r="4" style="fill:${seriesColor(seat)}" cx="${x(count)}" cy="${y(line.at(-1))}"/>`).join("")}
       ${ends.map(({seat, at}) => `<text class="chart-name" x="${x(count) + 9}" y="${(at + 3.5).toFixed(1)}">${escape(shortName(game.players[seat]))}</text>`).join("")}
     </svg><div class="chart-tip" hidden></div></div>
   </figure>`;
@@ -328,7 +339,7 @@ function moveChartCursor(index) {
   });
   if (index === null) return;
   const rows = chart.series.map((line, seat) => ({seat, points:line[index]})).sort((a, b) => b.points - a.points);
-  tip.innerHTML = `<strong>${index ? "Après la donne " + index : "Départ"}</strong>${rows.map(({seat, points}) => `<span><i style="background:${chartColors[seat]}"></i>${escape(chart.game.players[seat])}<b>${signed(points)}</b></span>`).join("")}`;
+  tip.innerHTML = `<strong>${index ? "Après la donne " + index : "Départ"}</strong>${rows.map(({seat, points}) => `<span><i style="background:${seriesColor(seat)}"></i>${escape(chart.game.players[seat])}<b>${signed(points)}</b></span>`).join("")}`;
   const share = chart.x(index) / chartBox.width;
   tip.style.left = share < .5 ? "calc(" + share * 100 + "% + 10px)" : "auto";
   tip.style.right = share < .5 ? "auto" : "calc(" + (1 - share) * 100 + "% + 10px)";
@@ -596,7 +607,10 @@ function roundTable(game) {
     const result = byId[round.contract].outcomeOnly || round.tricks === null ? played : played + ", " + round.tricks + " pli" + plural(round.tricks);
     const name = escape(byId[round.contract].label);
     const editLabel = `Modifier le tour ${index + 1}`;
-    return `<tr><td><button class="score-edit" data-action="edit-score" data-value="${index}" aria-label="${editLabel}, ${name}" title="${editLabel}">${icon("pencil")} ${name}${round.doubled ? " ×2" : ""}<small>Tour ${index + 1}, ${result}</small></button></td>${round.values.map((value, seat) => `<td class="${seat === dead ? "dead-cell" : color(value)}">${signed(value)}${seat === dead ? "<small>Mort</small>" : ""}</td>`).join("")}</tr>`;
+    const summary = `${name}${round.doubled ? " ×2" : ""}<small>Tour ${index + 1}, ${result}</small>`;
+    const first = viewer ? `<div class="score-edit">${summary}</div>`
+      : `<button class="score-edit" data-action="edit-score" data-value="${index}" aria-label="${editLabel}, ${name}" title="${editLabel}">${icon("pencil")} ${summary}</button>`;
+    return `<tr><td>${first}</td>${round.values.map((value, seat) => `<td class="${seat === dead ? "dead-cell" : color(value)}">${signed(value)}${seat === dead ? "<small>Mort</small>" : ""}</td>`).join("")}</tr>`;
   }).join("")}</tbody></table></div>`;
 }
 function history() {
@@ -1067,6 +1081,7 @@ document.addEventListener("click", event => {
     if (event.button || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
     event.preventDefault();
   }
+  if (viewer) return;
   actions[control.dataset.action]?.(control.dataset.value, control.dataset.seat);
 });
 
@@ -1316,7 +1331,16 @@ function startNavigation() {
     openPath();
   });
 }
-if (cloud) {
+if (viewer) {
+  page = "watch";
+  render();
+  window.whistViewer.update = state => {
+    const offset = window.scrollY;
+    data = normalize(watched(state));
+    render();
+    window.scrollTo(0, offset);
+  };
+} else if (cloud) {
   if (window.whistAuth) window.whistAuth.hasUnsaved = cloud.pending;
   app.textContent = "Chargement du carnet…";
   void cloud.load({remote:window.whistAuth?.initial ?? null}).then(startNavigation);

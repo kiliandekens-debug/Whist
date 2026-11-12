@@ -18,6 +18,31 @@
   --serif: ui-rounded, "Avenir Next", var(--sans);
   --mono: var(--sans);
   --radius: 16px;
+  --series-0: #2a78d6;
+  --series-1: #eb6834;
+  --series-2: #1baf7a;
+  --series-3: #eda100;
+  --series-4: #e87ba4;
+}
+/* Dark theme: the same felt-and-paper table, lights down. Set by the script in index.html. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #14211b;
+  --surface: #1c2d25;
+  --ink: #f1ead9;
+  --muted: #b1b5a3;
+  --line: #3a4b40;
+  --felt: #93cfab;
+  --felt-deep: #10231b;
+  --lime-light: #3d3b22;
+  --positive: #86d3a4;
+  --negative: #f09384;
+  --accent: #c9502f;
+  --series-0: #3987e5;
+  --series-1: #d95926;
+  --series-2: #199e70;
+  --series-3: #c98500;
+  --series-4: #d55181;
 }
 *,*::before,*::after {box-sizing:border-box}
 body {margin:0;padding-inline:env(safe-area-inset-left) env(safe-area-inset-right);background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
@@ -611,3 +636,58 @@ dialog[open] {animation:dialog-in 220ms cubic-bezier(.2,.8,.2,1) both}
 .suit-rank b {font-size:13px;color:var(--ink)}
 .suit-rank b.red-suit {color:var(--negative)}
 .suit-rank i {font-style:normal;opacity:.6;margin-inline:2px}
+
+.theme-toggle {min-height:32px;padding:4px 10px;border:1px solid var(--line);border-radius:20px;background:none;color:var(--muted);font-size:11px;font-weight:650}
+.theme-toggle:hover {color:var(--ink)}
+.live-badge {display:inline-flex;align-items:center;gap:7px;min-height:38px;color:var(--pale);font-size:13px;font-weight:700}
+.live-badge i {width:8px;height:8px;border-radius:50%;background:var(--lime);animation:live-pulse 1.8s ease-in-out infinite}
+@keyframes live-pulse {50% {opacity:.3}}
+div.score-edit {min-height:0;padding:4px 0}
+[data-storage="supabase"] .cloud-controls {flex-wrap:wrap}
+.cloud-buttons {display:flex;flex-wrap:wrap;gap:0 4px;margin-left:auto}
+.share-link {display:grid;gap:8px}
+.share-link input {font-size:13px}
+.share-link .btn {width:100%}
+
+[data-theme="dark"] .masthead nav :is(button,a):hover,[data-theme="dark"] .quiet:hover,[data-theme="dark"] .masthead nav :is(button,a)[aria-current="page"],
+[data-theme="dark"] .secondary:hover:not(:disabled),[data-theme="dark"] .player-suggestions button:hover,[data-theme="dark"] .player-suggestions button:focus-visible {background:#27392f}
+[data-theme="dark"] .primary,[data-theme="dark"] :is(.mode-tabs,.chips,.tricks,.toggle) button[aria-pressed="true"] {color:#0f1f18}
+[data-theme="dark"] .primary:hover:not(:disabled) {background:#aadcbd;border-color:#aadcbd}
+[data-theme="dark"] .mode-tabs button[aria-pressed="true"] span {color:#0f1f18}
+[data-theme="dark"] :is(.mode-tabs,.chips,.toggle) button[aria-pressed="true"] {box-shadow:0 2px 0 #0b1612}
+[data-theme="dark"] .hero .primary,[data-theme="dark"] .score-footer .primary {color:var(--felt-deep)}
+[data-theme="dark"] .board-actions .primary,[data-theme="dark"] .dialog-actions .btn[data-action^="confirm-cancel"],[data-theme="dark"] .dialog-actions .btn[data-action^="confirm-delete"] {color:var(--light)}
+[data-theme="dark"] .dialog-actions .btn[data-action="confirm-cancel-game"],[data-theme="dark"] .dialog-actions .btn[data-action="confirm-delete-game"] {background:#a8443a;border-color:#a8443a}
+[data-theme="dark"] .hero {box-shadow:0 4px 0 #0b1511;border-color:#2f5140}
+[data-theme="dark"] .home-game,[data-theme="dark"] .shortcut {box-shadow:0 3px 0 #0b1511}
+[data-theme="dark"] .home-game-actions .primary {box-shadow:0 3px 0 #0b1511}
+[data-theme="dark"] .home-turn {background:#3d3b22;color:#eadfb6}
+[data-theme="dark"] .step-mark {background:#3d3b22}
+[data-theme="dark"] .shortcut-symbol {background:#254230}
+[data-theme="dark"] .shortcut-history .shortcut-symbol {background:#4a2a24}
+[data-theme="dark"] .shortcut:hover {border-color:#6f8475}
+[data-theme="dark"] input {border-color:#4a5c50}
+[data-theme="dark"] input::placeholder {color:#8b968a}
+[data-theme="dark"] .avatar {border-color:#ffffff14}
+[data-theme="dark"] .tone0 {--tint:#3a4420;--tone:#d6e193}
+[data-theme="dark"] .tone1 {--tint:#4d2a24;--tone:#f2ab9c}
+[data-theme="dark"] .tone2 {--tint:#263b47;--tone:#abcde2}
+[data-theme="dark"] .tone3 {--tint:#21402f;--tone:#a1d8b7}
+[data-theme="dark"] .tone4 {--tint:#3d2c48;--tone:#d4b6e3}
+[data-theme="dark"] .count-options label:has(:checked) {border-color:#9aad63}
+[data-theme="dark"] .score-tile[data-role="dealer"] {background:#3a3520;border-top-color:#e6a536}
+[data-theme="dark"] .score-tile[data-role="pause"] {background:#18261f}
+[data-theme="dark"] .tile-role > span {background:#2c3b32}
+[data-theme="dark"] [data-role="dealer"] .tile-role > span {background:var(--lime);color:#1b2a12}
+[data-theme="dark"] .score-table thead th,[data-theme="dark"] .score-standings,[data-theme="dark"] .score-preview,[data-theme="dark"] .dialog-main .role {background:#24372d}
+[data-theme="dark"] .score-table tbody tr:nth-child(even) {background:#20322a}
+[data-theme="dark"] .score-edit svg {background:#2d4135}
+[data-theme="dark"] .rule-option input {background:#2a3b31;border-color:#506256}
+[data-theme="dark"] .rule-option input:checked {background:var(--felt);border-color:var(--felt)}
+[data-theme="dark"] .rule-option input:checked::after {background:#10231b}
+[data-theme="dark"] dialog {border-color:#44574a}
+[data-theme="dark"] .pick-players button[aria-pressed="true"] {border-color:#9aad63;box-shadow:inset 0 0 0 1px #9aad63}
+[data-theme="dark"] .tricks button.target:not([aria-pressed="true"]) {border-color:#8aa05a;background:#2c3b24}
+[data-theme="dark"] .roster-delete {color:var(--negative)}
+[data-theme="dark"] #toast {border:1px solid #3a4b40}
+[data-theme="dark"] .suit-burst span:nth-child(3n) {color:var(--lime)}

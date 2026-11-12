@@ -41,3 +41,11 @@ l’application (avec le commit sur les aperçus Vercel). Pour publier une
 version : `npm version patch`, `minor` ou `major` selon le changement, puis
 ajouter son entrée en tête de `CHANGELOG.md`. `npm test` vérifie que les deux
 correspondent.
+
+## Lien de suivi
+
+`supabase/whist-share.sql` crée la table et les fonctions du lien de suivi :
+à exécuter une fois dans l’éditeur SQL de Supabase. Le propriétaire crée ou
+désactive le lien depuis « Lien de suivi » en bas de page. L’adresse
+`/suivre/<jeton>` affiche, sans compte et en lecture seule, la partie en cours
+et la dernière partie terminée, rien d’autre.
