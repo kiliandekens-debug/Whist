@@ -7,6 +7,11 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.7.0 — 2026-11-12
+
+### Ajouté
+- Code QR du lien de suivi, à faire scanner autour de la table.
+
 ## 1.6.0 — 2026-11-12
 
 ### Ajouté

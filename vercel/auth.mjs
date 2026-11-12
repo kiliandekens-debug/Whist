@@ -1,4 +1,5 @@
 import {createClient} from "@supabase/supabase-js";
+import qrcode from "qrcode-generator";
 
 const config = WHIST_CONFIG;
 const client = createClient(config.url, config.key, {
@@ -216,7 +217,11 @@ async function manageFollowLink(action = "get") {
     return;
   }
   const url = location.origin + "/suivre/" + token;
-  frame(`<p class="body-copy">Toute personne qui a ce lien voit la partie en cours et la dernière partie terminée, sans pouvoir rien modifier.</p>
+  const code = qrcode(0, "M");
+  code.addData(url);
+  code.make();
+  frame(`<p class="body-copy">Fais scanner ce code, ou envoie le lien : on y voit la partie en cours et la dernière partie terminée, sans pouvoir rien modifier.</p>
+    <div class="share-qr" role="img" aria-label="Code QR du lien de suivi">${code.createSvgTag({scalable:true, margin:2})}</div>
     <input readonly aria-label="Lien de suivi" value="${url}">
     <button class="btn primary" type="button" id="follow-send">${navigator.share ? "Envoyer le lien" : "Copier le lien"}</button>
     <button class="btn secondary" type="button" id="follow-revoke">Désactiver ce lien</button>

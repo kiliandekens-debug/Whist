@@ -691,3 +691,6 @@ div.score-edit {min-height:0;padding:4px 0}
 [data-theme="dark"] .roster-delete {color:var(--negative)}
 [data-theme="dark"] #toast {border:1px solid #3a4b40}
 [data-theme="dark"] .suit-burst span:nth-child(3n) {color:var(--lime)}
+/* Always dark on white, whatever the theme: phone cameras need the contrast. */
+.share-qr {width:min(100%,230px);margin:2px auto 4px;padding:6px;border-radius:14px;background:#fff;border:1px solid var(--line)}
+.share-qr svg {display:block;width:100%;height:auto}

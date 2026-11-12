@@ -1,6 +1,6 @@
 {
   "name": "carnet-whist",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.119.0"
+    "@supabase/supabase-js": "2.119.0",
+    "qrcode-generator": "2.0.4"
   },
   "devDependencies": {
     "esbuild": "0.28.2"
