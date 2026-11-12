@@ -7,6 +7,11 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.5.0 — 2026-11-12
+
+### Ajouté
+- Rappel de l’ordre des couleurs (cœur, carreau, trèfle, pique) dans la saisie d’un score.
+
 ## 1.4.1 — 2026-11-12
 
 ### Modifié
