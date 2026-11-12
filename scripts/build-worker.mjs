@@ -7,6 +7,8 @@ const entries = await Promise.all(assetFiles.map(async path => {
   if (path === "index.html") content = content.replace("<body>", '<body data-storage="supabase">');
   return ["/" + path, content];
 }));
+// The offline shell is optional: older source folders do not contain it.
+try { entries.push(["/sw.js", await readFile(new URL("sw.js", source), "utf8")]); } catch {}
 const worker = await readFile(new URL("../worker/index.mjs", import.meta.url), "utf8");
 const output = new URL("../dist/server/", import.meta.url);
 await mkdir(output, {recursive:true});

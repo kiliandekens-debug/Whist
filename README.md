@@ -18,3 +18,18 @@ Le proxy Vercel transmet uniquement le jeton Supabase et le contexte de
 déploiement. Les aperçus utilisent un espace de sauvegarde distinct.
 
 La version Sites conserve son authentification et son accès serveur existants.
+
+## Synchronisation et hors connexion
+
+`sw.js` garde une copie de l’application : le réseau est toujours utilisé quand
+il répond, la copie ne sert que sans connexion. Sur Vercel, le carnet s’ouvre
+alors avec les données de l’appareil, pour le dernier compte qui s’y est
+connecté, et les modifications partent dès le retour du réseau.
+
+En cas de conflit entre deux appareils, on choisit la version à garder. La
+connexion par e-mail ne crée pas de compte : celui du propriétaire doit exister
+dans Supabase Auth.
+
+## Tests
+
+`npm test` vérifie le barème, le répertoire de joueurs et la synchronisation.
