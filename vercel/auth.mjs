@@ -17,7 +17,8 @@ let recovering = false;
 // A follow link is public and read-only: it never goes through sign-in.
 const watching = /^\/suivre\/([0-9a-f]{64})\/?$/.exec(location.pathname);
 navigation.hidden = true;
-app.textContent = "Connexion au carnet…";
+const wait = text => { app.innerHTML = '<p class="wrap app-wait"></p>'; app.firstChild.textContent = text; };
+wait("Connexion au carnet…");
 
 function lastUser() {
   try { return localStorage.getItem(marker); } catch { return null; }
@@ -151,13 +152,23 @@ function choosePassword() {
   form.elements.password.focus();
 }
 
+// The server no longer accepts this session: back to the sign-in form.
+let leaving = false;
+async function sessionLost() {
+  if (leaving) return;
+  leaving = true;
+  try { await client.auth.signOut({scope:"local"}); } catch {}
+  forgetUser();
+  location.reload();
+}
+
 // Opens the notebook. Without `initial`, the app starts from the copy kept on this device.
 async function launch(userId, initial) {
   if (loadedUser) return;
   loadedUser = userId;
   document.body.dataset.storage = "supabase";
   document.body.dataset.storageKey = "carnet-whist-v1:" + userId + (config.preview ? ":preview" : "");
-  window.whistAuth = {getAccessToken, initial};
+  window.whistAuth = {getAccessToken, initial, sessionLost};
   navigation.hidden = false;
   const logout = document.createElement("button");
   logout.type = "button";
@@ -245,7 +256,7 @@ async function manageFollowLink(action = "get") {
 
 // The public, read-only page behind a follow link.
 async function startWatching(token) {
-  app.textContent = "Chargement de la partie…";
+  wait("Chargement de la partie…");
   const read = async () => {
     const {data, error} = await client.rpc("whist_shared", {share_token:token});
     if (error) throw error;
@@ -292,7 +303,7 @@ async function start(session) {
   if (!session) return showLogin();
   if (session.access_token === rejectedToken) return;
   starting = true;
-  app.textContent = "Chargement de ton carnet…";
+  wait("Chargement de ton carnet…");
   try {
     let response = null;
     try {
@@ -343,15 +354,18 @@ client.auth.onAuthStateChange((event, session) => {
 
 const known = lastUser();
 if (watching) await startWatching(watching[1]);
-else if (known && !navigator.onLine) await startOffline(known);
-else {
-  // Refreshing an expired session can retry for a long time on a dead network.
-  const waiting = known ? new Promise(resolve => setTimeout(resolve, 8000, null)) : null;
-  const outcome = await (waiting ? Promise.race([client.auth.getSession(), waiting]) : client.auth.getSession());
-  if (!outcome || (known && outcome.error?.name === "AuthRetryableFetchError")) await startOffline(known);
-  else {
+else if (known) {
+  // This account already opened the notebook here: show it at once from the copy kept on the device.
+  // The session is checked in the background, and every exchange with the server checks it again.
+  await startOffline(known);
+  if (navigator.onLine) void client.auth.getSession().then(({data, error}) => {
     if (location.search) history.replaceState(null, "", location.pathname);
-    if (outcome.error) showLogin("Ce lien a expiré ou a été ouvert dans un autre navigateur. Demande un nouveau lien.");
-    else await start(outcome.data.session);
-  }
+    if (error?.name === "AuthRetryableFetchError") return;
+    if (!data?.session || data.session.user.id !== known) void sessionLost();
+  });
+} else {
+  const outcome = await client.auth.getSession();
+  if (location.search) history.replaceState(null, "", location.pathname);
+  if (outcome.error) showLogin("Ce lien a expiré ou a été ouvert dans un autre navigateur. Demande un nouveau lien.");
+  else await start(outcome.data.session);
 }

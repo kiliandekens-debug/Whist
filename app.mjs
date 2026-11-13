@@ -97,6 +97,7 @@ let storageMode;
 let replaced = false;
 const cloud = document.body.dataset.storage === "supabase" ? createCloudStore({
   authorize:window.whistAuth?.getAccessToken,
+  onSessionLost:window.whistAuth?.sessionLost,
   read:() => data,
   write(snapshot, meta) {
     if (snapshot !== data) {
@@ -1366,8 +1367,23 @@ if (viewer) {
   };
 } else if (cloud) {
   if (window.whistAuth) window.whistAuth.hasUnsaved = cloud.pending;
-  app.textContent = "Chargement du carnet…";
-  void cloud.load({remote:window.whistAuth?.initial ?? null}).then(startNavigation);
+  const remote = window.whistAuth?.initial ?? null;
+  if (syncMeta?.revision == null) {
+    // Nothing has ever been synchronised here: wait for the online notebook before showing anything.
+    app.innerHTML = '<p class="wrap app-wait">Chargement du carnet…</p>';
+    void cloud.load({remote}).then(startNavigation);
+  } else {
+    // Open at once on the copy kept on this device, then catch up in the background.
+    startNavigation();
+    replaced = false;
+    void cloud.load({remote}).then(() => {
+      if (!replaced) return;
+      if (dialog.open) dialog.close();
+      score = null;
+      openPath();
+      tell("Carnet mis à jour depuis un autre appareil.");
+    });
+  }
   window.addEventListener("online", () => {void refreshCloud();});
   document.addEventListener("visibilitychange", () => {void refreshCloud();});
 } else startNavigation();
