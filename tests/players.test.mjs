@@ -58,3 +58,18 @@ test("rikiki games have their own ranking and stay out of contract statistics", 
   assert.deepEqual(overallStatistics(state, "rikiki").get("b"), {games:1, wins:0, points:-2});
   assert.equal(playerStatistics(state, "a").completedGames, 1);
 });
+
+test("a player's summary keeps whist and rikiki apart", async () => {
+  const {playerSummary} = await import("../players.mjs");
+  const whist = (id, finished, values) => ({id, finished, players:["a","b","c","d"], playerIds:["a","b","c","d"], rounds:[{values}]});
+  const rikiki = {id:"r", finished:3, type:"rikiki", players:["a","b"], playerIds:["a","b"],
+    rounds:[{cards:1, bids:[1,0], tricks:[1,0], values:[12,10]}, {cards:2, bids:[1,0], tricks:[2,0], values:[-2,10]}]};
+  const summary = playerSummary({history:[rikiki, whist("w2", 2, [-30,10,10,10]), whist("w1", 1, [30,-10,-10,-10])]}, "a");
+  assert.deepEqual({...summary.whist, recent:summary.whist.recent.map(game => game.id)},
+    {games:2, wins:1, points:0, best:30, worst:-30, rounds:0, exact:0, recent:["w2","w1"]});
+  assert.equal(summary.rikiki.games, 1);
+  assert.equal(summary.rikiki.wins, 0);
+  assert.equal(summary.rikiki.rounds, 2);
+  assert.equal(summary.rikiki.exact, 1);
+  assert.equal(summary.rikiki.recent[0].rank, 2);
+});

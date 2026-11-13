@@ -775,3 +775,25 @@ a.text-action {text-decoration:none}
 .import-file input {position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 .footer {flex-wrap:wrap}
 .footer .theme-toggle + .theme-toggle {margin-left:-2px}
+
+.profile-title {margin:26px 0 4px;font-size:clamp(24px,4vw,31px)}
+.player-metrics.four {grid-template-columns:repeat(4,minmax(0,1fr));margin:12px 0 8px}
+.player-metrics strong.pos {color:var(--positive)}
+.player-metrics strong.neg {color:var(--negative)}
+.profile-recent {margin:8px 0 0;padding:0;list-style:none}
+.profile-recent li {display:flex;align-items:center;gap:10px;padding:2px 0;border-top:1px solid var(--line);font-size:13px}
+.profile-recent li span {margin-left:auto;color:var(--muted)}
+.profile-recent li strong {min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
+.list-item small + small {margin-top:1px}
+.list-item small {display:block}
+.group-item {align-items:flex-start}
+.group-tools {display:flex;gap:16px;margin-top:2px}
+.group-tools .text-action {min-height:36px;padding:4px 0}
+.group-shortcuts {display:flex;flex-wrap:wrap;gap:6px;margin:-8px 0 14px}
+.group-shortcuts .quiet {min-height:38px;padding:5px 12px;border-color:var(--line);border-radius:20px;font-size:12px}
+.group-shortcuts svg {width:15px;height:15px}
+@media (max-width:650px) {
+  .player-metrics.four {grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+.group-tools {align-items:center}
+.group-tools button.roster-delete {margin-bottom:0;min-height:36px}
