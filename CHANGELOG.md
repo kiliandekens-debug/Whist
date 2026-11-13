@@ -7,6 +7,14 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.8.0 — 2026-11-12
+
+### Ajouté
+- Accueil : résultat de la dernière partie et, dès deux parties terminées, podium du classement général.
+
+### Modifié
+- Bas de page plus net : état de la sauvegarde avec un voyant, actions du compte en boutons discrets.
+
 ## 1.7.0 — 2026-11-12
 
 ### Ajouté

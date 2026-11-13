@@ -694,3 +694,37 @@ div.score-edit {min-height:0;padding:4px 0}
 /* Always dark on white, whatever the theme: phone cameras need the contrast. */
 .share-qr {width:min(100%,230px);margin:2px auto 4px;padding:6px;border-radius:14px;background:#fff;border:1px solid var(--line)}
 .share-qr svg {display:block;width:100%;height:auto}
+
+.home-cards {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;grid-column:1 / -1}
+.home-card {display:grid;gap:8px;padding:15px 17px 9px;border-radius:20px;box-shadow:0 3px 0 #e5d8bf;min-width:0}
+.home-card-heading {display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.home-card-heading h2 {font-size:clamp(21px,4.9vw,27px);letter-spacing:-.04em}
+.home-ranking {display:grid;gap:0;margin:0;padding:0;list-style:none}
+.home-ranking li {display:flex;align-items:center;gap:11px;min-width:0;padding:7px 0;font-size:15px}
+.home-ranking li + li {border-top:1px solid var(--line)}
+.home-rank {display:grid;place-items:center;flex:none;width:28px;height:28px;border:1px solid var(--line);border-radius:50%;color:var(--muted);font:750 13px/1 var(--serif)}
+.home-rank.medal1 {background:var(--lime);border-color:var(--lime);color:#1b392d}
+.home-rank.medal2 {background:#dfe3dc;border-color:#dfe3dc;color:#23332b}
+.home-rank.medal3 {background:#ecc9a9;border-color:#ecc9a9;color:#5a3018}
+.home-rank-name {flex:1;min-width:0;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.home-rank-name small {display:block;font-weight:500;line-height:1.2}
+.home-ranking strong {font:750 17px/1 var(--serif);font-variant-numeric:tabular-nums}
+.home-ranking li:first-child .home-rank-name {font-size:16px}
+[data-theme="dark"] .home-card {box-shadow:0 3px 0 #0b1511}
+
+/* Account controls: one quiet row of pills instead of loose text links. */
+[data-storage="supabase"] .cloud-controls {gap:8px 10px;padding-block:4px 12px}
+#cloud-status {display:inline-flex;align-items:center;gap:7px}
+#cloud-status:not(:empty)::before {content:"";width:7px;height:7px;border-radius:50%;background:var(--positive);flex:none}
+.cloud-controls:has(#cloud-action:not([hidden])) #cloud-status::before {background:var(--accent)}
+.cloud-buttons {gap:6px}
+.cloud-buttons .quiet,#cloud-action {min-height:34px;padding:5px 12px;border:1px solid var(--line);border-radius:20px;color:var(--muted);font-size:12px;font-weight:650}
+.cloud-buttons .quiet:hover,#cloud-action:hover {color:var(--ink)}
+#cloud-action {border-color:var(--accent);color:var(--ink)}
+@media (max-width:650px) {
+  .cloud-buttons {margin-left:0;width:100%}
+  .cloud-buttons .quiet {flex:1;white-space:nowrap}
+}
+.footer {align-items:center}
+a.text-action {text-decoration:none}
+.home-card {align-content:start}
