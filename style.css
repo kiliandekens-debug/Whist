@@ -797,3 +797,14 @@ a.text-action {text-decoration:none}
 }
 .group-tools {align-items:center}
 .group-tools button.roster-delete {margin-bottom:0;min-height:36px}
+
+.trump-row {display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:13px;font-weight:720}
+.trump-row .toggle button {min-width:42px;font-size:17px}
+.trump-row .toggle button[data-value="none"] {font-size:12px;min-width:50px}
+.trump-row .toggle button.red-suit:not([aria-pressed="true"]) {color:var(--negative)}
+.help-steps {display:grid;gap:9px;margin:12px 0;padding-left:22px;font-size:15px}
+.help-steps strong {color:var(--ink)}
+.help-page .body-copy {margin-top:6px}
+.help-page .hint {font-size:13px}
+.help-page .hint .text-action {display:inline;min-height:0;padding:0;text-decoration:underline}
+.page-actions a.quiet {text-decoration:underline;text-underline-offset:4px}
