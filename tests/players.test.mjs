@@ -48,3 +48,13 @@ test("the overall ranking counts finished games, first places and points", async
   assert.deepEqual(stats.get("c"), {games:2, wins:1, points:4});
   assert.deepEqual(stats.get("e"), {games:1, wins:0, points:-5});
 });
+
+test("rikiki games have their own ranking and stay out of contract statistics", async () => {
+  const {overallStatistics} = await import("../players.mjs");
+  const whist = {players:["a","b","c","d"], playerIds:["a","b","c","d"], rounds:[{contract:"ab9", entries:[{seat:0}], tricks:9, values:[30,-10,-10,-10]}]};
+  const rikiki = {type:"rikiki", players:["a","b"], playerIds:["a","b"], rounds:[{cards:1, bids:[1,1], tricks:[1,0], values:[12,-2]}]};
+  const state = {history:[whist, rikiki], active:null};
+  assert.deepEqual(overallStatistics(state).get("a"), {games:1, wins:1, points:30});
+  assert.deepEqual(overallStatistics(state, "rikiki").get("b"), {games:1, wins:0, points:-2});
+  assert.equal(playerStatistics(state, "a").completedGames, 1);
+});

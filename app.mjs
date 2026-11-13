@@ -1,5 +1,5 @@
 import {createCloudStore, canonical} from "./cloud.mjs";
-import {modes, contracts, byId, rolesFor, calculateRound, declarationWon} from "./score.mjs";
+import {modes, contracts, byId, rolesFor, calculateRound, declarationWon, rikikiPlan, rikikiPoints} from "./score.mjs";
 import {playerKey, findPlayer, matchingPlayers, migratePlayers, registerPlayer, renamePlayer, playerStatistics, overallStatistics} from "./players.mjs";
 
 const app = document.querySelector("#app");
@@ -36,7 +36,7 @@ function normalize(snapshot) {
   return migratePlayers(state);
 }
 const pagePaths = {
-  home:"/accueil", setup:"/nouvelle-partie", table:"/nouvelle-partie/table", board:"/partie",
+  home:"/accueil", setup:"/nouvelle-partie", table:"/nouvelle-partie/table", rikiki:"/nouvelle-partie/rikiki", board:"/partie",
   history:"/historique", rules:"/bareme", groups:"/groupes", players:"/joueurs", statistics:"/classements",
 };
 const pagesByPath = new Map(Object.entries(pagePaths).map(([screen,path]) => [path,screen]));
@@ -51,6 +51,7 @@ let statsContract = "all";
 let statsOrder = "wins";
 let overallOrder = "wins";
 let chart = null;
+let rikiki = null;
 let fromRules = "home";
 let toastTimer;
 let restoreFocus;
@@ -73,7 +74,7 @@ const icons = {
 };
 const icon = name => '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' + icons[name] + '</svg>';
 const escape = value => String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
-const avatar = index => `<span class="avatar tone${index}" aria-hidden="true">${suits[index]}</span>`;
+const avatar = index => `<span class="avatar tone${index % 5}" aria-hidden="true">${suits[index % 5]}</span>`;
 const back = (action, label = "Accueil") => `<button class="back" data-action="${action}">${icon("back")}${label}</button>`;
 const head = (title, desc) => `<div class="page-head"><h1>${title}</h1><p>${desc}</p></div>`;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -169,11 +170,12 @@ function openPath() {
     if (placed && validNames(placed.players)) draft = placed;
     if (!validNames(draft?.players)) next = "setup";
   }
+  if (next === "rikiki" && !(draft?.type === "rikiki" && validNames(draft.players, "rikiki"))) next = "setup";
   if (next === "setup" && !draft) draft = makeDraft();
   go(next,true);
 }
 function render() {
-  const screens = {watch:watchView, home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
+  const screens = {watch:watchView, rikiki:rikikiOptions, home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
   app.innerHTML = screens[page]();
   document.querySelectorAll("[data-nav]").forEach(button => {
     if (button.dataset.nav === page) button.setAttribute("aria-current", "page");
@@ -184,7 +186,7 @@ function home() {
   const game = data.active;
   return `<div class="wrap home-screen${game ? " has-game" : ""}">
     <section class="hero" aria-labelledby="home-title">
-      <div class="hero-copy"><p class="home-note">Whist à 4 ou 5 joueurs</p><h1 id="home-title">On se fait<br>un <em>whist&nbsp;?</em></h1></div>
+      <div class="hero-copy"><p class="home-note">Whist à 4 ou 5 · Rikiki de 2 à 8</p><h1 id="home-title">On se fait<br>un <em>whist&nbsp;?</em></h1></div>
       <div class="card-fan" aria-hidden="true">
         <div class="playing-card card-back"><span>A ♥︎</span><b>♥︎</b><span>A ♥︎</span></div>
         <div class="playing-card card-front"><span>A ♣︎</span><b class="club-friend">♣︎<i></i></b><span>A ♣︎</span></div>
@@ -192,7 +194,7 @@ function home() {
       ${game ? "" : `<button class="btn primary hero-launch" data-action="new">Nouvelle partie ${icon("arrow")}</button>`}
     </section>
     ${game ? `<section class="home-game surface" aria-labelledby="home-game-title">
-      <div class="home-game-heading"><h2 id="home-game-title">Partie en cours</h2><span class="home-turn">Tour ${game.rounds.length + 1}</span></div>
+      <div class="home-game-heading"><h2 id="home-game-title">Partie en cours</h2><span class="home-turn">${game.type === "rikiki" ? "Rikiki, donne " : "Tour "}${game.rounds.length + 1}</span></div>
       <ul class="home-game-players" aria-label="Joueurs de la partie">${game.players.map((name,seat) => `<li>${avatar(seat)}<span title="${escape(name)}">${escape(name)}</span></li>`).join("")}</ul>
       <div class="home-game-actions"><button class="btn primary" data-action="resume">Reprendre ${icon("arrow")}</button><button class="btn secondary" data-action="new">Nouvelle partie</button></div>
     </section>` : ""}
@@ -212,27 +214,36 @@ function homeCards() {
   const rows = sums.map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points);
   const id = escape(game.id);
   const last = `<section class="home-card surface" aria-labelledby="home-last-title">
-    <div class="home-card-heading"><h2 id="home-last-title">Dernière partie</h2><small>${formatDate(game.finished)}</small></div>
+    <div class="home-card-heading"><h2 id="home-last-title">Dernière partie</h2><small>${game.type === "rikiki" ? "Rikiki, " : ""}${formatDate(game.finished)}</small></div>
     <ol class="home-ranking" role="list">${rows.map(({points, seat}) => `<li><span class="home-rank medal${ranks[seat]}">${ranks[seat]}</span><span class="home-rank-name">${escape(game.players[seat])}</span><strong class="${color(points)}">${signed(points)}</strong></li>`).join("")}</ol>
     <a class="text-action" href="/historique/${encodeURIComponent(game.id)}" data-action="view-game" data-value="${id}">Revoir la partie ${icon("arrow")}</a>
   </section>`;
-  const general = overallStatistics(data);
-  const leaders = data.history.length < 2 ? [] : data.roster.map(player => ({player, record:general.get(player.id)}))
+  const kind = game.type ?? "whist";
+  const games = data.history.filter(item => (item.type ?? "whist") === kind).length;
+  const general = overallStatistics(data, kind);
+  const leaders = games < 2 ? [] : data.roster.map(player => ({player, record:general.get(player.id)}))
     .filter(item => item.record).sort((a, b) => b.record.wins - a.record.wins || b.record.points - a.record.points).slice(0, 3);
   const podium = leaders.length ? `<section class="home-card surface" aria-labelledby="home-podium-title">
-    <div class="home-card-heading"><h2 id="home-podium-title">Classement</h2><small>${data.history.length} parties terminées</small></div>
+    <div class="home-card-heading"><h2 id="home-podium-title">Classement ${kind === "rikiki" ? "Rikiki" : "Whist"}</h2><small>${games} parties terminées</small></div>
     <ol class="home-ranking" role="list">${leaders.map(({player, record}, index) => `<li><span class="home-rank medal${index + 1}">${index + 1}</span><span class="home-rank-name">${escape(player.nickname)}<small>${record.wins} victoire${plural(record.wins)}</small></span><strong class="${color(record.points)}">${signed(record.points)}</strong></li>`).join("")}</ol>
     <a class="text-action" href="/classements" data-action="statistics">Tous les classements ${icon("arrow")}</a>
   </section>` : "";
   return `<div class="home-cards">${last}${podium}</div>`;
 }
+const playerCounts = {whist:[4, 5], rikiki:[2, 3, 4, 5, 6, 7, 8]};
 function setup() {
   const count = draft.players.length;
+  const kind = draft.type ?? "whist";
+  const note = kind === "rikiki" ? "Chacun annonce ses plis avant de jouer la donne."
+    : count === 5 ? "Le joueur après le donneur est mort à chaque donne." : "";
   return `<section class="wrap narrow page setup-page">${back("home")}${head("Qui joue ?", "Un prénom ou un pseudo pour chacun.")}
     <form id="setup-form">
+      <fieldset class="player-count"><legend>Jeu</legend><div class="count-options">
+        ${[["whist", "Whist"], ["rikiki", "Rikiki"]].map(([value, label]) => `<label><input type="radio" name="game" value="${value}" ${kind === value ? "checked" : ""}><span>${label}</span></label>`).join("")}
+      </div></fieldset>
       <fieldset class="player-count"><legend>Nombre de joueurs</legend><div class="count-options">
-        ${[4, 5].map(size => `<label><input type="radio" name="size" value="${size}" ${count === size ? "checked" : ""}><span>${size} joueurs</span></label>`).join("")}
-      </div>${count === 5 ? '<p class="hint">Le joueur après le donneur est mort à chaque donne.</p>' : ""}</fieldset>
+        ${playerCounts[kind].map(size => `<label><input type="radio" name="size" value="${size}" ${count === size ? "checked" : ""}><span>${size}${kind === "whist" ? " joueurs" : ""}</span></label>`).join("")}
+      </div>${note ? `<p class="hint">${note}</p>` : ""}</fieldset>
       <div class="setup-grid">${draft.players.map((name, index) => `<div class="player-input surface">
         ${avatar(index)}
         <label><span>Joueur ${index + 1}</span><input class="player-name" name="player${index}" maxlength="24"
@@ -243,7 +254,38 @@ function setup() {
       </div>`).join("")}</div>
       <p class="hint">Déjà venu ? Tape le début de son pseudo. Les nouveaux joueurs sont ajoutés au départ.</p>
       <p class="error" id="setup-error" hidden>Choisis un joueur différent à chaque place, y compris pour les anciens pseudos.</p>
-      <div class="page-actions"><button class="quiet" type="button" data-action="groups">${icon("users")} Groupes de joueurs</button><button class="btn primary" type="submit">Placer les joueurs ${icon("arrow")}</button></div>
+      <div class="page-actions"><button class="quiet" type="button" data-action="groups">${icon("users")} Groupes de joueurs</button><button class="btn primary" type="submit">${kind === "rikiki" ? "Régler la partie" : "Placer les joueurs"} ${icon("arrow")}</button></div>
+    </form></section>`;
+}
+// Rikiki settings, chosen once before the first deal.
+function rikikiOptions() {
+  const count = draft.players.length;
+  const limit = Math.floor(52 / count);
+  const settings = draft.rikiki ??= {dealer:0, min:1, max:Math.floor(51 / count), shape:"updown", success:10, trick:2, miss:2, hook:true};
+  settings.max = Math.min(settings.max, limit);
+  settings.min = Math.min(settings.min, settings.max);
+  if (settings.dealer >= count) settings.dealer = 0;
+  const numbers = selected => Array.from({length:limit}, (_, index) => index + 1).map(value => `<option ${value === selected ? "selected" : ""}>${value}</option>`).join("");
+  const points = (name, label, sign) => `<label>${label}<span class="rule-input"><span aria-hidden="true">${sign}</span><input type="number" name="${name}" min="0" max="999" step="1" inputmode="numeric" required value="${settings[name]}"></span></label>`;
+  return `<section class="wrap narrow page">${back("setup", "Prénoms")}${head("Rikiki", "Règle la partie avant de distribuer.")}
+    <form id="rikiki-form">
+      <fieldset class="player-count"><legend>Qui distribue en premier ?</legend><div class="count-options">
+        ${draft.players.map((name, seat) => `<label><input type="radio" name="dealer" value="${seat}" ${settings.dealer === seat ? "checked" : ""}><span>${escape(name)}</span></label>`).join("")}
+      </div></fieldset>
+      <div class="stats-filters"><label>Cartes au minimum<select name="min">${numbers(settings.min)}</select></label>
+        <label>Cartes au maximum<select name="max">${numbers(settings.max)}</select></label></div>
+      <fieldset class="player-count"><legend>Déroulement</legend><div class="count-options">
+        ${[["updown", "Monter puis redescendre"], ["up", "Monter seulement"], ["downup", "Descendre puis remonter"]].map(([value, label]) => `<label><input type="radio" name="shape" value="${value}" ${settings.shape === value ? "checked" : ""}><span>${label}</span></label>`).join("")}
+      </div><p class="hint">Avec ${count} joueurs, on peut distribuer jusqu’à ${limit} cartes chacun.</p></fieldset>
+      <fieldset class="player-count"><legend>Points</legend><div class="rikiki-points">
+        ${points("success", "Annonce réussie", "+")}${points("trick", "Par pli réussi", "+")}${points("miss", "Par pli d’écart", "−")}
+      </div></fieldset>
+      <div class="rule-option surface">
+        <label for="rikiki-hook"><strong>Le donneur est contraint</strong><small>Le total des annonces ne peut pas être égal au nombre de cartes.</small></label>
+        <input type="checkbox" role="switch" id="rikiki-hook" name="hook" ${settings.hook ? "checked" : ""}>
+      </div>
+      <p class="error" id="rikiki-error" role="alert" hidden>Le minimum de cartes ne peut pas dépasser le maximum.</p>
+      <div class="page-actions"><span></span><button class="btn primary" type="submit">Lancer la partie ${icon("arrow")}</button></div>
     </form></section>`;
 }
 function table() {
@@ -271,44 +313,72 @@ function watchView() {
   return `<section class="wrap narrow page">${head("Suivi en direct", "Les scores de la table, mis à jour tout seuls.")}${empty("♣", "Aucune partie en cours", "Les scores apparaîtront ici dès qu’une partie commence.")}</section>`;
 }
 function archive() {return gameView(viewedGame, true);}
-function scoreTile(name, seat, points, rank, roles) {
+function scoreTile(name, seat, points, rank, roles, note = "") {
   let role = "";
   let label = "";
   if (seat === roles?.dealer) { role = "dealer"; label = "Donneur"; }
   else if (seat === roles?.dead) { role = "pause"; label = "Mort"; }
   else if (seat === roles?.first) { role = "first"; label = "1er à parler"; }
-  return `<article class="score-tile surface tone${seat}" ${role ? `data-role="${role}"` : ""}>
+  return `<article class="score-tile surface tone${seat % 5}" ${role ? `data-role="${role}"` : ""}>
     <div class="tile-player">${avatar(seat)}<span class="tile-name" title="${escape(name)}">${escape(name)}</span></div>
     <strong class="tile-score ${color(points)}">${signed(points)}</strong>
     <span class="tile-rank">${ordinal(rank)}</span>
+    ${note ? `<span class="tile-bid">${note}</span>` : ""}
     ${roles ? `<div class="tile-role">${role ? `<span>${icon(role)}${label}</span>` : ""}</div>` : ""}
   </article>`;
 }
 function gameView(game, finished) {
   const sums = totals(game);
   const ranks = ranksFor(sums);
-  const roles = finished ? null : rolesFor(game, game.rounds.length);
+  const played = game.rounds.length;
+  const rikikiGame = game.type === "rikiki";
+  const cards = rikikiGame ? game.plan[played] : null;
+  // Every planned rikiki deal has been played; only finishing is left.
+  const complete = rikikiGame && played >= game.plan.length;
+  const roles = finished || complete ? null : rolesFor(game, played);
   const leaders = game.players.filter((_, index) => ranks[index] === 1);
-  const heading = finished ? "Partie terminée" : "Tour " + (game.rounds.length + 1);
+  const heading = finished ? "Partie terminée" : complete ? "Partie complète" : (rikikiGame ? "Donne " : "Tour ") + (played + 1);
+  const eyebrow = finished ? formatDate(game.finished) + (rikikiGame ? ", Rikiki" : "")
+    : !rikikiGame ? "Feuille de score, " + game.players.length + " joueurs"
+    : complete ? "Rikiki, toutes les donnes sont jouées"
+    : "Rikiki, " + cards + " carte" + plural(cards) + " · donne " + (played + 1) + " sur " + game.plan.length;
+  const bids = rikikiGame && !finished ? game.pending?.bids : null;
+  let controls = "";
+  if (finished && !viewer) controls = `<div class="board-actions share-actions"><button class="btn primary" data-action="share-game">${icon("share")} Partager le résultat</button></div>`;
+  else if (viewer || finished) controls = "";
+  else if (!rikikiGame) controls = `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${played ? "" : "disabled"}>Terminer la partie</button></div>`;
+  else if (complete) controls = `<div class="board-actions share-actions"><button class="btn primary" data-action="finish">Terminer la partie ${icon("arrow")}</button></div>`;
+  else if (bids) controls = `<div class="board-actions"><button class="btn primary" data-action="rk-tricks">${icon("plus")} Encoder les plis</button><button class="btn secondary" data-action="rk-bids">Modifier les annonces</button></div>`;
+  else controls = `<div class="board-actions"><button class="btn primary" data-action="rk-bids">${icon("plus")} Encoder les annonces</button><button class="btn secondary" data-action="finish" ${played ? "" : "disabled"}>Terminer la partie</button></div>`;
   return `<section class="board-hero"><div class="wrap"><div class="board-nav">
     ${viewer ? '<span class="live-badge"><i aria-hidden="true"></i>Suivi en direct</span>' : finished ? `${back("history", "Historique")}<button class="board-cancel" type="button" data-action="delete-game">Supprimer la partie</button>` : `${back("home")}<button class="board-cancel" type="button" data-action="cancel-game">Annuler la partie</button>`}
   </div><div class="board-top">
-    <div><span class="eyebrow">${finished ? formatDate(game.finished) : "Feuille de score, " + game.players.length + " joueurs"}</span><h1>${heading}</h1></div>
+    <div><span class="eyebrow">${eyebrow}</span><h1>${heading}</h1></div>
     ${finished ? `<div class="board-leader">${icon("scores")}<span>${leaders.length > 1 ? "En tête ex æquo" : "En tête"}<strong>${leaders.map(escape).join(", ")}</strong></span></div>` : '<div class="board-emblem" aria-hidden="true"><span>♦</span><span>♠</span></div>'}
   </div></div></section>
   <section class="wrap board-body" data-player-count="${game.players.length}">
-    <div class="round-heading score-heading"><h2>Scores cumulés</h2><small>Points</small></div>
-    <div class="score-tiles">${game.players.map((name, seat) => scoreTile(name, seat, sums[seat], ranks[seat], roles)).join("")}</div>
+    <div class="round-heading score-heading"><h2>Scores cumulés</h2><small>${bids ? "Points et annonces" : "Points"}</small></div>
+    <div class="score-tiles">${game.players.map((name, seat) => scoreTile(name, seat, sums[seat], ranks[seat], roles, bids ? "Annonce " + bids[seat] : "")).join("")}</div>
     ${scoreChart(game)}
-    <div class="round-heading"><h2>Donnes</h2><small>${game.rounds.length} au total</small></div>
-    ${game.rounds.length ? roundTable(game) : empty("♣", "À vous de jouer !", "Après la première donne, ajoute le score ici.")}
-    ${finished || viewer ? "" : `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${game.rounds.length ? "" : "disabled"}>Terminer la partie</button></div>`}
-    ${finished && !viewer ? `<div class="board-actions share-actions"><button class="btn primary" data-action="share-game">${icon("share")} Partager le résultat</button></div>` : ""}
+    <div class="round-heading"><h2>Donnes</h2><small>${rikikiGame ? played + " sur " + game.plan.length : played + " au total"}</small></div>
+    ${played ? (rikikiGame ? rikikiTable(game) : roundTable(game)) : empty("♣", "À vous de jouer !", rikikiGame ? "Encode les annonces, jouez la donne, puis encode les plis." : "Après la première donne, ajoute le score ici.")}
+    ${controls}
   </section>`;
 }
+function rikikiTable(game) {
+  return `<div class="surface score-table-wrap"><table class="score-table" aria-label="Points par donne"><thead><tr><th scope="col">Donne</th>${game.players.map((name, seat) => `<th scope="col">${avatar(seat)}<span>${escape(name)}</span></th>`).join("")}</tr></thead>
+  <tbody>${game.rounds.map((round, index) => {
+    const summary = `Donne ${index + 1}<small>${round.cards} carte${plural(round.cards)}</small>`;
+    const label = `Modifier la donne ${index + 1}`;
+    const first = viewer ? `<div class="score-edit">${summary}</div>`
+      : `<button class="score-edit" data-action="rk-edit" data-value="${index}" aria-label="${label}" title="${label}">${icon("pencil")} ${summary}</button>`;
+    return `<tr><td>${first}</td>${round.values.map((value, seat) => `<td class="${color(value)}">${signed(value)}<small>${round.tricks[seat]} sur ${round.bids[seat]}</small></td>`).join("")}</tr>`;
+  }).join("")}</tbody></table></div>
+  <p class="hint">Sous chaque score, les plis faits sur les plis annoncés.</p>`;
+}
 // Validated together as a categorical palette on the app surface; names are always shown beside them.
-// The picture to share keeps these light values; on screen the theme supplies --series-0 to --series-4.
-const chartColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"];
+// The picture to share keeps these light values; on screen the theme supplies --series-0 to --series-7.
+const chartColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
 const seriesColor = seat => "var(--series-" + seat + ")";
 const chartBox = {width:360, height:230, left:36, right:70, top:12, bottom:24};
 const shortName = name => name.length > 9 ? name.slice(0, 8) + "…" : name;
@@ -388,11 +458,17 @@ function shareText(game) {
   const ranks = ranksFor(sums);
   const lines = sums.map((points, seat) => ({points, seat})).sort((a, b) => b.points - a.points)
     .map(({points, seat}) => ranks[seat] + (ranks[seat] === 1 ? "er" : "e") + " " + game.players[seat] + " " + signed(points));
-  return "Whist du " + formatDate(game.finished) + "\n" + lines.join("\n") + "\n" + game.rounds.length + " donne" + plural(game.rounds.length);
+  return (game.type === "rikiki" ? "Rikiki du " : "Whist du ") + formatDate(game.finished) + "\n" + lines.join("\n") + "\n" + game.rounds.length + " donne" + plural(game.rounds.length);
 }
 // The highest score a declarer took in a single round, for the picture's closing line.
 function bestRound(game) {
   let best = null;
+  if (game.type === "rikiki") {
+    game.rounds.forEach(round => round.values.forEach((points, seat) => {
+      if (points > (best?.points ?? 0)) best = {seat, points, contract:round.tricks[seat] + " pli" + plural(round.tricks[seat]) + " sur " + round.cards};
+    }));
+    return best;
+  }
   game.rounds.forEach(round => round.entries.forEach(({seat}) => {
     if (round.values[seat] > (best?.points ?? 0)) best = {seat, points:round.values[seat], contract:byId[round.contract]?.label};
   }));
@@ -640,13 +716,13 @@ function roundTable(game) {
 }
 function history() {
   return `<section class="wrap narrow page">${back("home")}${head("Historique", "Retrouve le classement et les donnes de tes parties terminées.")}
-    ${data.history.length ? `<div class="list">${data.history.map(game => `<article class="list-item surface"><div><strong>${game.players.map(escape).join(", ")}</strong><small>${formatDate(game.finished)}, ${game.rounds.length} donne${plural(game.rounds.length)}</small></div><a class="btn secondary" href="/historique/${encodeURIComponent(game.id)}" data-action="view-game" data-value="${escape(game.id)}">Voir ${icon("arrow")}</a></article>`).join("")}</div>` : empty("♥", "Aucune partie terminée", "Tes parties apparaîtront ici à la fin du jeu.")}
+    ${data.history.length ? `<div class="list">${data.history.map(game => `<article class="list-item surface"><div><strong>${game.players.map(escape).join(", ")}</strong><small>${game.type === "rikiki" ? "Rikiki, " : ""}${formatDate(game.finished)}, ${game.rounds.length} donne${plural(game.rounds.length)}</small></div><a class="btn secondary" href="/historique/${encodeURIComponent(game.id)}" data-action="view-game" data-value="${escape(game.id)}">Voir ${icon("arrow")}</a></article>`).join("")}</div>` : empty("♥", "Aucune partie terminée", "Tes parties apparaîtront ici à la fin du jeu.")}
   </section>`;
 }
 function groups() {
   return `<section class="wrap narrow page">${draft ? back("setup", "Prénoms") : back("home")}${head("Groupes de joueurs", "Retrouve tes tables habituelles sans ressaisir les noms.")}
     ${data.groups.length ? `<div class="list">${data.groups.map((group, index) => `<article class="list-item surface"><div><strong>${escape(group.name)}</strong><small>${group.players.map(escape).join(", ")}</small></div><button class="btn secondary" data-action="use-group" data-value="${index}">Choisir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♦", "Aucun groupe enregistré", "Tu peux enregistrer les joueurs que tu viens de saisir ou ceux de ta dernière partie.")}
-    <div class="page-actions">${data.last ? `<button class="btn secondary" data-action="last-group">Reprendre les derniers joueurs</button>` : ""}<button class="btn primary" data-action="save-group" ${validNames(draft?.players) || data.last ? "" : "disabled"}>Enregistrer un groupe</button></div>
+    <div class="page-actions">${data.last ? `<button class="btn secondary" data-action="last-group">Reprendre les derniers joueurs</button>` : ""}<button class="btn primary" data-action="save-group" ${validNames(draft?.players, draft?.type) || data.last ? "" : "disabled"}>Enregistrer un groupe</button></div>
   </section>`;
 }
 function playerCards(query = "") {
@@ -677,10 +753,10 @@ function playerProfile() {
 }
 const average = record => signed(Math.round(record.points / record.games * 10) / 10).replace(".", ",");
 function statisticsPage() {
-  const overall = statsContract === "all";
+  const overall = ["all", "rikiki"].includes(statsContract);
   const order = overall ? overallOrder : statsOrder;
   const byName = (a, b) => a.player.nickname.localeCompare(b.player.nickname, "fr-BE");
-  const general = overallStatistics(data);
+  const general = overallStatistics(data, statsContract === "rikiki" ? "rikiki" : "whist");
   const ranking = data.roster.map(player => ({player,
     record:overall ? general.get(player.id) : playerStatistics(data, player.id).contracts[statsContract]}))
     .filter(item => item.record).sort((a, b) => {
@@ -696,7 +772,7 @@ function statisticsPage() {
     ? `<table class="rule-table stats-table" aria-label="Classement général"><thead><tr><th>Joueur</th><th>Victoires</th><th>Points</th><th>Moyenne</th></tr></thead><tbody>${ranking.map(item => `<tr><th scope="row">${who(item)}<small>${item.record.games} partie${plural(item.record.games)}</small></th><td>${item.record.wins}</td><td class="${color(item.record.points)}">${signed(item.record.points)}</td><td class="${color(item.record.points)}">${average(item.record)}</td></tr>`).join("")}</tbody></table>`
     : `<table class="rule-table stats-table" aria-label="Classement par contrat"><thead><tr><th>Joueur</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th></tr></thead><tbody>${ranking.map(item => `<tr><th scope="row">${who(item)}<small>${item.record.attempts} tentative${plural(item.record.attempts)}</small></th><td>${item.record.wins}</td><td>${item.record.losses}</td><td>${successRate(item.record)}</td></tr>`).join("")}</tbody></table>`;
   return `<section class="wrap narrow page">${back("players","Joueurs")}${head("Classements","Qui gagne le plus ? Qui réussit ses misères ?")}
-    <div class="stats-filters"><label>Classement<select id="stats-contract"><option value="all" ${overall ? "selected" : ""}>Général, toutes les parties</option>${contracts.map(contract => `<option value="${contract.id}" ${statsContract === contract.id ? "selected" : ""}>${escape(contract.label)}</option>`).join("")}</select></label>
+    <div class="stats-filters"><label>Classement<select id="stats-contract"><option value="all" ${statsContract === "all" ? "selected" : ""}>Whist, toutes les parties</option><option value="rikiki" ${statsContract === "rikiki" ? "selected" : ""}>Rikiki, toutes les parties</option>${contracts.map(contract => `<option value="${contract.id}" ${statsContract === contract.id ? "selected" : ""}>${escape(contract.label)}</option>`).join("")}</select></label>
     <label>Classer par<select id="stats-order">${orders.map(([value,label]) => `<option value="${value}" ${order === value ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
     <p class="hint">${overall ? "Seules les parties terminées comptent. Une victoire est une première place, ex æquo compris. La moyenne est le nombre de points par partie." : "Le taux de réussite porte uniquement sur les annonces de chaque joueur. Le nombre de tentatives permet de comparer leur expérience."}</p>
     ${ranking.length ? `<div class="rule-table-wrap surface">${table}</div>` : overall ? empty("♣","Aucune partie terminée","Le classement apparaîtra après la première partie terminée.") : empty("♣","Aucune annonce pour ce contrat","Personne n’a encore tenté ce contrat.")}
@@ -873,13 +949,106 @@ function renderScore() {
   }
   dialog.scrollTop = scroll;
 }
-function validNames(names) {
-  return [4, 5].includes(names?.length) && names.every(name => name.trim()) &&
+function openRikiki(phase, index = null) {
+  const game = page === "archive" ? viewedGame : data.active;
+  if (game?.type !== "rikiki") return;
+  const round = index === null ? null : game.rounds[index];
+  const at = index ?? game.rounds.length;
+  const cards = round?.cards ?? game.plan[at];
+  if ((index !== null && !round) || cards == null || (phase === "tricks" && !game.pending)) return;
+  const blank = game.players.map(() => null);
+  rikiki = {game, index, phase, cards, at, values:null,
+    bids:[...(round?.bids ?? game.pending?.bids ?? blank)], tricks:[...(round?.tricks ?? blank)]};
+  renderRikiki();
+}
+function rikikiPicker(kind, seat, selected, max, target) {
+  const action = kind === "bids" ? "rk-bid" : "rk-made";
+  const who = escape(rikiki.game.players[seat]);
+  // A long row of numbers stops being readable past a normal hand; step instead.
+  if (max > 13) return `<div class="stepper">
+    <button aria-label="Un de moins pour ${who}" data-action="${action}" data-step="-1" data-value="${(selected ?? 0) - 1}" data-seat="${seat}" ${selected ? "" : "disabled"}>−</button>
+    <output>${selected ?? "–"}</output>
+    <button aria-label="Un de plus pour ${who}" data-action="${action}" data-step="1" data-value="${(selected ?? -1) + 1}" data-seat="${seat}" ${selected === max ? "disabled" : ""}>+</button></div>`;
+  return `<div class="tricks">${Array.from({length:max + 1}, (_, n) => `<button aria-label="${n} pli${plural(n)} pour ${who}" aria-pressed="${n === selected}" class="${n === target ? "target" : ""}" data-action="${action}" data-value="${n}" data-seat="${seat}">${n}</button>`).join("")}</div>`;
+}
+function renderRikiki() {
+  const {game, phase, cards, at, bids, tricks} = rikiki;
+  const {dealer, first} = rolesFor(game, at);
+  const count = game.players.length;
+  const order = game.players.map((_, offset) => (first + offset) % count);
+  const sum = list => list.reduce((total, value) => total + (value ?? 0), 0);
+  const filled = list => list.every(value => value !== null);
+  const showBids = phase !== "tricks";
+  const showTricks = phase !== "bids";
+  const hooked = game.hook && filled(bids) && sum(bids) === cards;
+  const tricksDone = filled(tricks) && sum(tricks) === cards;
+  const ready = (!showBids || (filled(bids) && !hooked)) && (!showTricks || tricksDone);
+  rikiki.values = showTricks && ready && filled(bids) ? game.players.map((_, seat) => rikikiPoints(bids[seat], tricks[seat], game.rules)) : null;
+  // Once the others have spoken, tell the dealer which number is closed to them.
+  const others = bids.filter((_, seat) => seat !== dealer);
+  const closed = cards - sum(others);
+  const warning = game.hook && showBids && filled(others) && closed >= 0 ? ", ne peut pas annoncer " + closed : "";
+  const active = dialog.open ? document.activeElement : null;
+  const focusData = active?.dataset ? {...active.dataset} : null;
+  const scroll = dialog.scrollTop;
+  const title = (phase === "bids" ? "Les annonces de la donne " : phase === "tricks" ? "Les plis de la donne " : "Modifier la donne ") + (at + 1);
+  const problems = [];
+  if (showBids && hooked) problems.push("Le total des annonces ne peut pas être égal au nombre de cartes : le donneur doit changer la sienne.");
+  if (showTricks && filled(tricks) && !tricksDone) problems.push("Le total des plis doit faire " + cards + ".");
+  showDialog(`${dialogHead(title)}
+    ${scoreStandings(game)}
+    <div class="dialog-main score-entry">${roleStrip(game, at)}
+      <p class="rikiki-cards"><strong>${cards} carte${plural(cards)}</strong> par joueur${showBids ? ". Chacun annonce ses plis, dans l’ordre de parole." : ". Combien de plis chacun a-t-il faits ?"}</p>
+      ${order.map(seat => `<div class="rikiki-row"><p class="rikiki-name">${avatar(seat)}<strong>${escape(game.players[seat])}</strong><small>${seat === dealer ? "Donneur" + warning : seat === first ? "Parle en premier" : ""}${phase === "tricks" ? (seat === dealer || seat === first ? ", " : "") + "a annoncé " + bids[seat] : ""}</small></p>
+        ${showBids ? (phase === "edit" ? '<small class="rikiki-label">Annonce</small>' : "") + rikikiPicker("bids", seat, bids[seat], cards, null) : ""}
+        ${showTricks ? (phase === "edit" ? '<small class="rikiki-label">Plis faits</small>' : "") + rikikiPicker("tricks", seat, tricks[seat], cards, bids[seat]) : ""}
+      </div>`).join("")}
+    </div>
+    <div class="score-footer">
+      <p class="rikiki-total">${showBids ? `Annoncés <strong>${sum(bids)}</strong> pour ${cards} carte${plural(cards)}` : ""}${showBids && showTricks ? " · " : ""}${showTricks ? `Plis encodés <strong>${sum(tricks)}</strong> sur ${cards}` : ""}</p>
+      ${problems.map(text => `<p class="error" role="alert">${text}</p>`).join("")}
+      ${rikiki.values ? `<div class="score-preview" style="grid-template-columns:repeat(${Math.min(count, 4)},minmax(0,1fr))" aria-label="Aperçu des points">${rikiki.values.map((value, seat) => `<span class="${color(value)}"><small>${escape(game.players[seat])}</small>${signed(value)}</span>`).join("")}</div>` : ""}
+      <div class="dialog-actions"><button class="btn secondary" data-action="close">Annuler</button><button class="btn primary" data-action="rk-confirm" ${ready ? "" : "disabled"}>${icon("check")}${phase === "edit" ? "Enregistrer" : "Confirmer"}</button></div>
+    </div>`);
+  if (focusData?.action) {
+    const same = Array.from(dialog.querySelectorAll("[data-action]")).find(button =>
+      button.dataset.action === focusData.action && button.dataset.seat === focusData.seat &&
+      (focusData.step ? button.dataset.step === focusData.step : button.dataset.value === focusData.value));
+    if (same && !same.disabled) same.focus({preventScroll:true});
+  }
+  dialog.scrollTop = scroll;
+}
+function recordRikiki() {
+  const {game, index, phase, cards, bids, tricks, values} = rikiki;
+  if (phase === "bids") {
+    game.pending = {bids:[...bids]};
+    save();
+    dialog.close();
+    render();
+    tell("Annonces notées. Bonne donne !");
+    return;
+  }
+  if (!values) return;
+  const before = totals(game);
+  const round = {cards, bids:[...bids], tricks:[...tricks], values};
+  if (index === null) {
+    game.rounds.push(round);
+    delete game.pending;
+  } else game.rounds[index] = round;
+  save();
+  dialog.close();
+  render();
+  animateScoreChanges(before, totals(game));
+  tell(index === null ? "C’est noté !" : "Voilà, c’est corrigé.");
+}
+function validNames(names, kind = "whist") {
+  return (playerCounts[kind] ?? playerCounts.whist).includes(names?.length) && names.every(name => name.trim()) &&
     new Set(names.map(name => findPlayer(data.roster,name)?.id ?? "name:" + playerKey(name))).size === names.length;
 }
 function makeDraft(names = ["", "", "", ""], ids = []) {
   const players = names.map((name,index) => data.roster.find(player => player.id === ids[index]) ?? findPlayer(data.roster,name));
-  return {players:names.map((name,index) => players[index]?.nickname ?? name),playerIds:players.map(player => player?.id ?? null), dealer:0};
+  return {players:names.map((name,index) => players[index]?.nickname ?? name),playerIds:players.map(player => player?.id ?? null), dealer:0,
+    type:playerCounts.whist.includes(names.length) ? "whist" : "rikiki"};
 }
 function newDraft(names, ids) {
   draft = makeDraft(names,ids);
@@ -951,7 +1120,11 @@ function recordScore() {
 }
 function launchGame() {
   const playerIds = draftPlayerIds().map((id,index) => id ?? registerPlayer(data.roster,draft.players[index]).id);
-  data.active = {players:[...draft.players], playerIds, dealer:draft.dealer, rounds:[], scoringVersion:2, overrides:data.overrides, piccolo:data.piccolo};
+  if (draft.type === "rikiki") {
+    const {dealer, min, max, shape, success, trick, miss, hook} = draft.rikiki;
+    data.active = {type:"rikiki", players:[...draft.players], playerIds, dealer, rounds:[], scoringVersion:2, overrides:{}, piccolo:false,
+      plan:rikikiPlan(min, max, shape), rules:{success, trick, miss}, hook};
+  } else data.active = {players:[...draft.players], playerIds, dealer:draft.dealer, rounds:[], scoringVersion:2, overrides:data.overrides, piccolo:data.piccolo};
   data.last = [...draft.players];
   data.lastPlayerIds = [...playerIds];
   draft = null;
@@ -1040,6 +1213,12 @@ const actions = {
       <div class="dialog-actions"><button class="btn secondary" data-action="close" type="button">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form>`);
   },
   "add-score"() { openScore(); },
+  "rk-bids"() { openRikiki("bids"); },
+  "rk-tricks"() { openRikiki("tricks"); },
+  "rk-edit"(value) { openRikiki("edit", Number(value)); },
+  "rk-bid"(value, seat) { rikiki.bids[Number(seat)] = Number(value); renderRikiki(); },
+  "rk-made"(value, seat) { rikiki.tricks[Number(seat)] = Number(value); renderRikiki(); },
+  "rk-confirm"() { recordRikiki(); },
   "edit-score"(value) { openScore(Number(value)); },
   close() { dialog.close(); },
   mode(value) {
@@ -1090,7 +1269,8 @@ const actions = {
   },
   finish() { ask("Terminer la partie ?", "Les scores et les donnes seront consultables dans l’historique.", "confirm-finish", "Terminer la partie"); },
   "confirm-finish"() {
-    viewedGame = {...data.active, id:crypto.randomUUID(), finished:Date.now()};
+    const {pending, ...played} = data.active;
+    viewedGame = {...played, id:crypto.randomUUID(), finished:Date.now()};
     data.history.unshift(viewedGame);
     data.active = null;
     save();
@@ -1203,24 +1383,28 @@ app.addEventListener("change", event => {
   if (["stats-contract","stats-order"].includes(event.target.id)) {
     const id = event.target.id;
     if (id === "stats-contract") statsContract = event.target.value;
-    else if (statsContract === "all") overallOrder = event.target.value;
+    else if (["all", "rikiki"].includes(statsContract)) overallOrder = event.target.value;
     else statsOrder = event.target.value;
     render();
     app.querySelector("#" + id).focus({preventScroll:true});
     return;
   }
-  if (event.target.form?.id === "setup-form" && event.target.name === "size") {
-    const count = Number(event.target.value);
-    if (count === 5) {
-      draft.players.push(draft.fifthPlayer ?? "");
-      draft.playerIds.push(draft.fifthPlayerId ?? null);
-    } else {
-      draft.fifthPlayer = draft.players.pop();
-      draft.fifthPlayerId = draft.playerIds.pop();
+  if (event.target.form?.id === "setup-form" && ["size", "game"].includes(event.target.name)) {
+    const field = event.target.name;
+    if (field === "game") draft.type = event.target.value;
+    const sizes = playerCounts[draft.type ?? "whist"];
+    const count = field === "size" ? Number(event.target.value) : sizes.includes(draft.players.length) ? draft.players.length : 4;
+    // Names taken off the end come back if the table grows again.
+    draft.spare ??= [];
+    while (draft.players.length > count) draft.spare.push([draft.players.pop(), draft.playerIds.pop()]);
+    while (draft.players.length < count) {
+      const [name, id] = draft.spare.pop() ?? ["", null];
+      draft.players.push(name);
+      draft.playerIds.push(id);
     }
     if (draft.dealer >= count) draft.dealer = 0;
     render();
-    app.querySelector('[name="size"]:checked').focus();
+    app.querySelector('[name="' + field + '"]:checked').focus();
     return;
   }
   if (event.target.id !== "piccolo") return;
@@ -1235,14 +1419,27 @@ document.addEventListener("submit", event => {
     case "setup-form": {
       event.preventDefault();
       const names = draft.players.map((_, index) => fields.get("player" + index).trim());
-      if (!validNames(names)) {
+      if (!validNames(names, draft.type)) {
         app.querySelector("#setup-error").hidden = false;
         return;
       }
       draft.players = names;
       draft.playerIds = draftPlayerIds(names);
       draft.players = names.map((name,index) => data.roster.find(player => player.id === draft.playerIds[index])?.nickname ?? name);
-      go("table");
+      go(draft.type === "rikiki" ? "rikiki" : "table");
+      break;
+    }
+    case "rikiki-form": {
+      event.preventDefault();
+      const number = name => Number(fields.get(name));
+      const settings = {dealer:number("dealer"), min:number("min"), max:number("max"), shape:fields.get("shape"),
+        success:number("success"), trick:number("trick"), miss:number("miss"), hook:fields.has("hook")};
+      draft.rikiki = settings;
+      if (settings.min > settings.max) {
+        app.querySelector("#rikiki-error").hidden = false;
+        return;
+      }
+      actions.start();
       break;
     }
     case "rules-form": {
@@ -1295,7 +1492,7 @@ document.addEventListener("submit", event => {
         form.querySelector(".error").hidden = false;
         return;
       }
-      const players = (validNames(draft?.players) ? draft.players : data.last).map(player => player.trim());
+      const players = (validNames(draft?.players, draft?.type) ? draft.players : data.last).map(player => player.trim());
       const playerIds = players.map(player => registerPlayer(data.roster,player).id);
       data.groups.push({name, players,playerIds});
       save();

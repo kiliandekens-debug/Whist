@@ -54,3 +54,26 @@ test("games from the first barème keep their scoring", () => {
   const game = {players:["a","b","c","d"], dealer:0, scoringVersion:1};
   assert.deepEqual(calculateRound(game, 0, byId.ab10, [{seat:0}], 10, false, {}), [42, -14, -14, -14]);
 });
+
+test("rikiki deals climb and come back down", async () => {
+  const {rikikiPlan} = await import("../score.mjs");
+  assert.deepEqual(rikikiPlan(1, 3), [1, 2, 3, 2, 1]);
+  assert.deepEqual(rikikiPlan(1, 3, "up"), [1, 2, 3]);
+  assert.deepEqual(rikikiPlan(2, 4, "downup"), [4, 3, 2, 3, 4]);
+  assert.equal(rikikiPlan(1, 26).length, 51);
+});
+
+test("rikiki pays an exact announcement and charges each trick of difference", async () => {
+  const {rikikiPoints} = await import("../score.mjs");
+  assert.equal(rikikiPoints(0, 0), 10);
+  assert.equal(rikikiPoints(3, 3), 16);
+  assert.equal(rikikiPoints(3, 1), -4);
+  assert.equal(rikikiPoints(0, 2), -4);
+  assert.equal(rikikiPoints(2, 2, {success:5, trick:1, miss:3}), 7);
+  assert.equal(rikikiPoints(2, 4, {success:5, trick:1, miss:3}), -6);
+});
+
+test("nobody sits out at a five-player rikiki table", () => {
+  assert.equal(rolesFor({players:["a","b","c","d","e"], dealer:4, type:"rikiki"}, 1).dead, null);
+  assert.deepEqual(rolesFor({players:["a","b","c"], dealer:2, type:"rikiki"}, 0), {dealer:2, dead:null, first:0});
+});

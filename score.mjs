@@ -41,10 +41,11 @@ export function declarationWon(contract, entry, tricks) {
   return contract.target === 0 || contract.exact ? tricks === contract.target : tricks >= contract.target;
 }
 
-export function rolesFor({players, dealer: openingDealer}, roundIndex = 0) {
+export function rolesFor({players, dealer: openingDealer, type}, roundIndex = 0) {
   const count = players.length;
   const dealer = (openingDealer + roundIndex) % count;
-  const dead = count === 5 ? (dealer + 1) % count : null;
+  // Only whist sits a fifth player out; everyone plays every round of rikiki.
+  const dead = type !== "rikiki" && count === 5 ? (dealer + 1) % count : null;
   const first = ((dead ?? dealer) + 1) % count;
   return {dealer, dead, first};
 }
@@ -125,4 +126,20 @@ export function calculate(contract, entries, tricks, doubled, overrides = {}, ve
     scores[(declarer + offset) % 4] = (split + Number(offset <= remainder)) * factor * -Math.sign(points);
   }
   return scores.map(value => value || 0);
+}
+
+// Rikiki: each player announces a number of tricks, and is paid for hitting it exactly.
+export const rikikiDefaults = {success:10, trick:2, miss:2};
+
+// The number of cards dealt in each round, e.g. 1, 2, 3, 2, 1.
+export function rikikiPlan(min, max, shape = "updown") {
+  const up = Array.from({length:max - min + 1}, (_, index) => min + index);
+  const down = [...up].reverse();
+  if (shape === "up") return up;
+  if (shape === "downup") return [...down, ...up.slice(1)];
+  return [...up, ...down.slice(1)];
+}
+
+export function rikikiPoints(bid, made, rules = rikikiDefaults) {
+  return bid === made ? rules.success + rules.trick * made : -rules.miss * Math.abs(bid - made);
 }
