@@ -14,13 +14,12 @@ for (const name of ["app.mjs","cloud.mjs","score.mjs","players.mjs","style.css",
   await copyFile(new URL("../" + name, import.meta.url), new URL(name, output));
 }
 let html = await readFile(new URL("../index.html", import.meta.url), "utf8");
-html = html.replace('src="/app.mjs"', 'src="/auth.mjs"');
+html = html.replace('src="/app.mjs"', 'src="/boot.mjs"');
 const commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7);
 html = await stamp(html, process.env.VERCEL_ENV !== "production" && commit ? "aperçu " + commit : "");
 await writeFile(new URL("index.html", output), html);
-await build({
-  entryPoints:["vercel/auth.mjs"],outfile:"vercel-public/auth.mjs",bundle:true,
-  format:"esm",platform:"browser",target:"es2022",minify:true,
-  external:["./app.mjs"],
-  define:{WHIST_CONFIG:JSON.stringify({url,key,preview:process.env.VERCEL_ENV !== "production"})},
-});
+const preview = process.env.VERCEL_ENV !== "production";
+const common = {bundle:true, format:"esm", platform:"browser", target:"es2022", minify:true, external:["./app.mjs", "./auth.mjs"]};
+// The boot script only needs to know which notebook it is; the sign-in entry carries Supabase.
+await build({...common, entryPoints:["vercel/boot.mjs"], outfile:"vercel-public/boot.mjs", define:{WHIST_CONFIG:JSON.stringify({preview})}});
+await build({...common, entryPoints:["vercel/auth.mjs"], outfile:"vercel-public/auth.mjs", define:{WHIST_CONFIG:JSON.stringify({url, key, preview})}});

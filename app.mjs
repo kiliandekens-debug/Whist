@@ -6,7 +6,7 @@ const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
 const toast = document.querySelector("#toast");
 const storageKey = document.body.dataset.storageKey || "carnet-whist-v1";
-const defaults = {active:null, history:[], groups:[], last:null, overrides:{}, piccolo:false, roster:[], lastPlayerIds:null};
+const defaults = {active:null, history:[], groups:[], last:null, overrides:{}, piccolo:false, roster:[], lastPlayerIds:null, lastType:null, rikikiSettings:null};
 // A follow link shows one notebook read-only: nothing is read from or written to this device.
 const viewer = document.body.dataset.viewer === "true";
 const watched = state => ({active:state?.active ?? null, history:state?.last ? [state.last] : []});
@@ -55,7 +55,7 @@ let rikiki = null;
 let fromRules = "home";
 let toastTimer;
 let restoreFocus;
-const suits = ["♠", "♥", "♣", "♦", "★"];
+const suits = ["♠", "♥", "♣", "♦", "★", "●", "▲", "■"];
 const icons = {
   plus:'<path d="M12 5v14M5 12h14"/>',
   arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',
@@ -74,7 +74,7 @@ const icons = {
 };
 const icon = name => '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">' + icons[name] + '</svg>';
 const escape = value => String(value).replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[char]);
-const avatar = index => `<span class="avatar tone${index % 5}" aria-hidden="true">${suits[index % 5]}</span>`;
+const avatar = index => `<span class="avatar tone${index % 8}" aria-hidden="true">${suits[index % 8]}</span>`;
 const back = (action, label = "Accueil") => `<button class="back" data-action="${action}">${icon("back")}${label}</button>`;
 const head = (title, desc) => `<div class="page-head"><h1>${title}</h1><p>${desc}</p></div>`;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -87,10 +87,22 @@ const plural = n => n > 1 ? "s" : "";
 const formatDate = value => new Intl.DateTimeFormat("fr-BE", {dateStyle:"medium", timeStyle:"short"}).format(new Date(value));
 const empty = (suit, title, copy) => `<div class="empty surface"><span class="step-mark" aria-hidden="true">${suit}</span><strong>${title}</strong><p>${copy}</p></div>`;
 
-function tell(message) {
+// `action` adds a button to the message, e.g. to undo what was just done.
+function tell(message, action = null) {
   toast.textContent = message;
+  if (action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toast-action";
+    button.textContent = action.label;
+    button.addEventListener("click", () => {
+      toast.textContent = "";
+      action.run();
+    });
+    toast.append(button);
+  }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {toast.textContent = "";}, 3200);
+  toastTimer = setTimeout(() => {toast.textContent = "";}, action ? 8000 : 3200);
 }
 const storageStatus = document.querySelector("#cloud-status");
 const storageAction = document.querySelector("#cloud-action");
@@ -176,12 +188,40 @@ function openPath() {
 }
 function render() {
   const screens = {watch:watchView, rikiki:rikikiOptions, home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
-  app.innerHTML = screens[page]();
+  try {
+    app.innerHTML = screens[page]();
+  } catch (error) {
+    // Never leave a blank page: the notebook is safe and can still be exported.
+    console.error(error);
+    app.innerHTML = `<section class="wrap narrow page">${head("Oups, cet écran a planté", "Ton carnet n’est pas perdu. Recharge l’application ; si ça recommence, exporte une sauvegarde.")}
+      <div class="page-actions"><button class="btn secondary" data-action="export-data">Exporter le carnet</button><button class="btn primary" data-action="reload">Recharger</button></div></section>`;
+  }
+  void syncWakeLock();
   document.querySelectorAll("[data-nav]").forEach(button => {
     if (button.dataset.nav === page) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
 }
+// Keep the screen on while a game is on the table.
+let wakeLock = null;
+let wakeLockPending = false;
+async function syncWakeLock() {
+  if (!navigator.wakeLock || wakeLockPending) return;
+  const wanted = !document.hidden && !!data.active && ["board", "watch"].includes(page);
+  if (wanted && !wakeLock) {
+    wakeLockPending = true;
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch {}
+    wakeLockPending = false;
+  } else if (!wanted && wakeLock) {
+    const lock = wakeLock;
+    wakeLock = null;
+    lock.release().catch(() => {});
+  }
+}
+document.addEventListener("visibilitychange", () => {void syncWakeLock();});
 function home() {
   const game = data.active;
   return `<div class="wrap home-screen${game ? " has-game" : ""}">
@@ -261,7 +301,9 @@ function setup() {
 function rikikiOptions() {
   const count = draft.players.length;
   const limit = Math.floor(52 / count);
-  const settings = draft.rikiki ??= {dealer:0, min:1, max:Math.floor(51 / count), shape:"updown", success:10, trick:2, miss:2, hook:true};
+  // Start from the settings of the last rikiki game, as far as they fit this table.
+  const settings = draft.rikiki ??= {dealer:0, min:1, shape:"updown", success:10, trick:2, miss:2, hook:true, ...data.rikikiSettings, max:Math.floor(51 / count)};
+  if (data.rikikiSettings?.max < settings.max) settings.max = data.rikikiSettings.max;
   settings.max = Math.min(settings.max, limit);
   settings.min = Math.min(settings.min, settings.max);
   if (settings.dealer >= count) settings.dealer = 0;
@@ -319,7 +361,7 @@ function scoreTile(name, seat, points, rank, roles, note = "") {
   if (seat === roles?.dealer) { role = "dealer"; label = "Donneur"; }
   else if (seat === roles?.dead) { role = "pause"; label = "Mort"; }
   else if (seat === roles?.first) { role = "first"; label = "1er à parler"; }
-  return `<article class="score-tile surface tone${seat % 5}" ${role ? `data-role="${role}"` : ""}>
+  return `<article class="score-tile surface tone${seat % 8}" ${role ? `data-role="${role}"` : ""}>
     <div class="tile-player">${avatar(seat)}<span class="tile-name" title="${escape(name)}">${escape(name)}</span></div>
     <strong class="tile-score ${color(points)}">${signed(points)}</strong>
     <span class="tile-rank">${ordinal(rank)}</span>
@@ -344,7 +386,7 @@ function gameView(game, finished) {
     : "Rikiki, " + cards + " carte" + plural(cards) + " · donne " + (played + 1) + " sur " + game.plan.length;
   const bids = rikikiGame && !finished ? game.pending?.bids : null;
   let controls = "";
-  if (finished && !viewer) controls = `<div class="board-actions share-actions"><button class="btn primary" data-action="share-game">${icon("share")} Partager le résultat</button></div>`;
+  if (finished && !viewer) controls = `<div class="board-actions"><button class="btn secondary" data-action="rematch">Rejouer</button><button class="btn primary" data-action="share-game">${icon("share")} Partager le résultat</button></div>`;
   else if (viewer || finished) controls = "";
   else if (!rikikiGame) controls = `<div class="board-actions"><button class="btn primary" data-action="add-score">${icon("plus")} Ajouter un score</button><button class="btn secondary" data-action="finish" ${played ? "" : "disabled"}>Terminer la partie</button></div>`;
   else if (complete) controls = `<div class="board-actions share-actions"><button class="btn primary" data-action="finish">Terminer la partie ${icon("arrow")}</button></div>`;
@@ -372,7 +414,7 @@ function rikikiTable(game) {
     const label = `Modifier la donne ${index + 1}`;
     const first = viewer ? `<div class="score-edit">${summary}</div>`
       : `<button class="score-edit" data-action="rk-edit" data-value="${index}" aria-label="${label}" title="${label}">${icon("pencil")} ${summary}</button>`;
-    return `<tr><td>${first}</td>${round.values.map((value, seat) => `<td class="${color(value)}">${signed(value)}<small>${round.tricks[seat]} sur ${round.bids[seat]}</small></td>`).join("")}</tr>`;
+    return `<tr><td>${first}</td>${round.values.map((value, seat) => `<td class="${color(value)}">${signed(value)}<small>${round.tricks[seat]}${game.players.length > 5 ? "/" : " sur "}${round.bids[seat]}</small></td>`).join("")}</tr>`;
   }).join("")}</tbody></table></div>
   <p class="hint">Sous chaque score, les plis faits sur les plis annoncés.</p>`;
 }
@@ -1074,10 +1116,13 @@ function validNames(names, kind = "whist") {
   return (playerCounts[kind] ?? playerCounts.whist).includes(names?.length) && names.every(name => name.trim()) &&
     new Set(names.map(name => findPlayer(data.roster,name)?.id ?? "name:" + playerKey(name))).size === names.length;
 }
-function makeDraft(names = ["", "", "", ""], ids = []) {
+function makeDraft(names, ids = []) {
+  // An empty table opens on the game played last time.
+  const blank = !names;
+  names ??= ["", "", "", ""];
   const players = names.map((name,index) => data.roster.find(player => player.id === ids[index]) ?? findPlayer(data.roster,name));
   return {players:names.map((name,index) => players[index]?.nickname ?? name),playerIds:players.map(player => player?.id ?? null), dealer:0,
-    type:playerCounts.whist.includes(names.length) ? "whist" : "rikiki"};
+    type:blank ? data.lastType ?? "whist" : playerCounts.whist.includes(names.length) ? "whist" : "rikiki"};
 }
 function newDraft(names, ids) {
   draft = makeDraft(names,ids);
@@ -1152,16 +1197,68 @@ function launchGame() {
   if (draft.type === "rikiki") {
     const {dealer, min, max, shape, success, trick, miss, hook} = draft.rikiki;
     data.active = {type:"rikiki", players:[...draft.players], playerIds, dealer, rounds:[], scoringVersion:2, overrides:{}, piccolo:false,
-      plan:rikikiPlan(min, max, shape), rules:{success, trick, miss}, hook};
+      plan:rikikiPlan(min, max, shape), rules:{success, trick, miss}, hook, settings:{...draft.rikiki}};
+    data.rikikiSettings = {...draft.rikiki};
   } else data.active = {players:[...draft.players], playerIds, dealer:draft.dealer, rounds:[], scoringVersion:2, overrides:data.overrides, piccolo:data.piccolo};
   data.last = [...draft.players];
   data.lastPlayerIds = [...playerIds];
+  data.lastType = draft.type ?? "whist";
   draft = null;
   save();
   if (dialog.open) dialog.close();
   go("board");
   if (data.active.type === "rikiki") openRikiki("bids");
 }
+const undo = (restore, next) => ({label:"Annuler", run() {
+  restore();
+  save();
+  go(next);
+}});
+let pendingImport = null;
+async function exportData() {
+  const text = JSON.stringify(data, null, 2);
+  const name = "carnet-whist-" + new Date().toISOString().slice(0, 10) + ".json";
+  const file = new File([text], name, {type:"application/json"});
+  try {
+    // An installed iPhone app cannot download; it hands the file to the share sheet instead.
+    if (window.matchMedia("(display-mode: standalone)").matches && navigator.canShare?.({files:[file]})) {
+      await navigator.share({files:[file]});
+      return;
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+  }
+  const url = URL.createObjectURL(file);
+  const download = document.createElement("a");
+  download.href = url;
+  download.download = name;
+  download.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const counts = state => state.history.length + " partie" + plural(state.history.length) + " et " + (state.roster?.length ?? 0) + " joueur" + plural(state.roster?.length ?? 0);
+function openBackup() {
+  showDialog(`${dialogHead("Sauvegarde")}<div class="dialog-main share-link">
+    <p class="body-copy">Ton carnet contient ${counts(data)}. Exporte-le de temps en temps : le fichier permet de tout retrouver, ici ou sur un autre appareil.</p>
+    <button class="btn primary" type="button" data-action="export-data">Exporter le carnet</button>
+    <label class="btn secondary import-file">Importer une sauvegarde<input type="file" id="import-file" accept="application/json,.json"></label>
+    <p class="hint">L’import remplace tout le carnet actuel. Tu pourras annuler juste après.</p>
+    <p class="error" id="import-error" role="alert" hidden>Ce fichier n’est pas une sauvegarde du carnet.</p></div>`);
+}
+const validGame = game => Array.isArray(game?.players) && Array.isArray(game.rounds) && game.rounds.every(round => Array.isArray(round?.values));
+dialog.addEventListener("change", async event => {
+  if (event.target.id !== "import-file" || !event.target.files[0]) return;
+  let snapshot = null;
+  try { snapshot = JSON.parse(await event.target.files[0].text()); } catch {}
+  const valid = snapshot && Array.isArray(snapshot.history) && snapshot.history.every(validGame) &&
+    (snapshot.active == null || validGame(snapshot.active)) && (snapshot.roster == null || Array.isArray(snapshot.roster)) &&
+    (snapshot.groups == null || Array.isArray(snapshot.groups));
+  if (!valid) {
+    dialog.querySelector("#import-error").hidden = false;
+    return;
+  }
+  pendingImport = snapshot;
+  ask("Remplacer le carnet ?", "La sauvegarde contient " + counts(snapshot) + ". Elle remplacera le carnet actuel, qui contient " + counts(data) + ".", "confirm-import", "Remplacer le carnet");
+});
 const actions = {
   home() { draft = null; go("home"); },
   new() { newDraft(); },
@@ -1205,24 +1302,26 @@ const actions = {
     ask("Supprimer " + escape(player.nickname) + " ?", "Ce joueur sera retiré du répertoire, des suggestions et des classements. Ses anciennes parties resteront consultables avec leurs scores.", "confirm-delete-player", "Supprimer le joueur");
   },
   "confirm-delete-player"() {
+    const before = data.roster;
     data.roster = data.roster.filter(player => player.id !== playerToDelete);
     playerToDelete = null;
     viewedPlayerId = null;
     save();
     dialog.close();
     go("players");
-    tell("Joueur supprimé du répertoire.");
+    tell("Joueur supprimé du répertoire.", undo(() => { data.roster = before; }, "players"));
   },
   "clear-players"() {
     ask("Vider le répertoire ?", "Toutes les fiches joueurs seront retirées du répertoire, des suggestions et des classements. Les anciennes parties et leurs scores resteront consultables.", "confirm-clear-players", "Vider le répertoire");
   },
   "confirm-clear-players"() {
+    const before = data.roster;
     data.roster = [];
     viewedPlayerId = null;
     save();
     dialog.close();
     go("players");
-    tell("Le répertoire est vide.");
+    tell("Le répertoire est vide.", undo(() => { data.roster = before; }, "players"));
   },
   "select-player"(id,seat) {
     const index = Number(seat);
@@ -1282,24 +1381,57 @@ const actions = {
   },
   "confirm-cancel-game"() {
     if (page !== "board" || !data.active) return;
+    const before = data.active;
     data.active = null;
     save();
     dialog.close();
     go("home", true);
-    tell("Partie annulée.");
+    tell("Partie annulée.", undo(() => { data.active ??= before; }, "board"));
   },
   "share-game"() { if (viewedGame) void shareGame(viewedGame); },
+  reload() { window.location.reload(); },
+  "export-data"() { void exportData(); },
+  "confirm-import"() {
+    const before = data;
+    try {
+      const {_supabase, ...snapshot} = pendingImport;
+      data = normalize(snapshot);
+    } catch {
+      data = before;
+      dialog.close();
+      tell("Cette sauvegarde est illisible.");
+      return;
+    }
+    pendingImport = null;
+    draft = null;
+    score = null;
+    save();
+    dialog.close();
+    go("home");
+    tell("Carnet importé.", undo(() => { data = before; }, "home"));
+  },
+  // Same players, same game, same settings: straight back to the names to start again.
+  rematch() {
+    const game = viewedGame;
+    if (!game) return;
+    draft = makeDraft(game.players, game.playerIds);
+    draft.type = game.type ?? "whist";
+    if (game.settings) draft.rikiki = {...game.settings, dealer:(game.settings.dealer + 1) % game.players.length};
+    swap = null;
+    go("setup");
+  },
   "delete-game"() {
     ask("Supprimer cette partie ?", "Elle sera retirée de l’historique, des fiches joueurs et des classements. Cette action est définitive.", "confirm-delete-game", "Supprimer la partie", "Garder la partie");
   },
   "confirm-delete-game"() {
     if (page !== "archive" || !viewedGame) return;
+    const before = data.history;
     data.history = data.history.filter(game => game !== viewedGame);
     viewedGame = null;
     save();
     dialog.close();
     go("history", true);
-    tell("Partie supprimée.");
+    tell("Partie supprimée.", undo(() => { data.history = before; }, "history"));
   },
   finish() { ask("Terminer la partie ?", "Les scores et les donnes seront consultables dans l’historique.", "confirm-finish", "Terminer la partie"); },
   "confirm-finish"() {
@@ -1613,6 +1745,15 @@ if (viewer) {
   window.addEventListener("online", () => {void refreshCloud();});
   document.addEventListener("visibilitychange", () => {void refreshCloud();});
 } else startNavigation();
+if (!viewer) {
+  const backup = document.querySelector("#backup-button");
+  backup.hidden = false;
+  backup.addEventListener("click", openBackup);
+}
 if ("serviceWorker" in navigator && window.isSecureContext) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
+  // The app opens on its stored copy; the worker says when a newer one has been fetched.
+  navigator.serviceWorker.addEventListener("message", event => {
+    if (event.data?.type === "whist-updated") tell("Nouvelle version disponible.", {label:"Recharger", run() { window.location.reload(); }});
+  });
 }
