@@ -7,6 +7,12 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.9.2 — 2026-11-13
+
+### Modifié
+- Rikiki : la saisie des plis s’ouvre toute seule après les annonces.
+- Rikiki : les plis qui ne sont plus un choix se remplissent tout seuls (dernier joueur, ou zéro pour tous quand tous les plis sont attribués).
+
 ## 1.9.1 — 2026-11-13
 
 ### Modifié

@@ -958,9 +958,25 @@ function openRikiki(phase, index = null) {
   const cards = round?.cards ?? game.plan[at];
   if ((index !== null && !round) || cards == null || (phase === "tricks" && !game.pending)) return;
   const blank = game.players.map(() => null);
-  rikiki = {game, index, phase, cards, at, values:null,
+  rikiki = {game, index, phase, cards, at, values:null, auto:new Set(),
     bids:[...(round?.bids ?? game.pending?.bids ?? blank)], tricks:[...(round?.tricks ?? blank)]};
   renderRikiki();
+  dialog.scrollTop = 0;
+}
+// Tricks always add up to the cards dealt, so fill in every number that is no longer a choice.
+function settleTricks(changed) {
+  const {tricks, cards} = rikiki;
+  rikiki.auto.delete(changed);
+  // At a table of two, one player's tricks always decide the other's.
+  if (tricks.length === 2) rikiki.auto = new Set([1 - changed]);
+  const open = tricks.map((_, seat) => seat).filter(seat => tricks[seat] === null || rikiki.auto.has(seat));
+  const left = cards - tricks.reduce((total, value, seat) => total + (open.includes(seat) ? 0 : value), 0);
+  rikiki.auto = new Set();
+  for (const seat of open) {
+    const forced = left === 0 ? 0 : open.length === 1 && left > 0 ? left : null;
+    tricks[seat] = forced;
+    if (forced !== null) rikiki.auto.add(seat);
+  }
 }
 function rikikiPicker(kind, seat, selected, max, target, closed = null) {
   const action = kind === "bids" ? "rk-bid" : "rk-made";
@@ -990,6 +1006,8 @@ function renderRikiki() {
   const closed = game.hook && showBids && filled(others) && cards - sum(others) >= 0 ? cards - sum(others) : null;
   // A number chosen before the others spoke may have become the closed one.
   if (closed !== null && bids[dealer] === closed) bids[dealer] = null;
+  // With a single card, the closed number leaves the dealer only one thing to say.
+  if (closed !== null && cards === 1) bids[dealer] = 1 - closed;
   const warning = closed === null ? "" : ", ne peut pas annoncer " + closed;
   const active = dialog.open ? document.activeElement : null;
   const focusData = active?.dataset ? {...active.dataset} : null;
@@ -997,7 +1015,8 @@ function renderRikiki() {
   const title = (phase === "bids" ? "Les annonces de la donne " : phase === "tricks" ? "Les plis de la donne " : "Modifier la donne ") + (at + 1);
   const problems = [];
   if (showBids && hooked) problems.push("Le total des annonces ne peut pas être égal au nombre de cartes : le donneur doit changer la sienne.");
-  if (showTricks && filled(tricks) && !tricksDone) problems.push("Le total des plis doit faire " + cards + ".");
+  if (showTricks && sum(tricks) > cards) problems.push("Le total des plis dépasse " + cards + ".");
+  else if (showTricks && filled(tricks) && !tricksDone) problems.push("Le total des plis doit faire " + cards + ".");
   showDialog(`${dialogHead(title)}
     ${scoreStandings(game)}
     <div class="dialog-main score-entry">${roleStrip(game, at)}
@@ -1023,12 +1042,15 @@ function renderRikiki() {
 }
 function recordRikiki() {
   const {game, index, phase, cards, bids, tricks, values} = rikiki;
+  const live = page === "board";
   if (phase === "bids") {
     game.pending = {bids:[...bids]};
     save();
-    dialog.close();
     render();
     tell("Annonces notées. Bonne donne !");
+    // The tricks come next: keep the window open on them instead of asking for another tap.
+    if (live) openRikiki("tricks");
+    else dialog.close();
     return;
   }
   if (!values) return;
@@ -1039,12 +1061,14 @@ function recordRikiki() {
     delete game.pending;
   } else game.rounds[index] = round;
   save();
-  dialog.close();
   render();
-  animateScoreChanges(before, totals(game));
   tell(index === null ? "C’est noté !" : "Voilà, c’est corrigé.");
   // The next deal starts with its announcements: open them without another tap.
-  if (index === null && page === "board" && game.rounds.length < game.plan.length) openRikiki("bids");
+  if (index === null && live && game.rounds.length < game.plan.length) openRikiki("bids");
+  else {
+    dialog.close();
+    animateScoreChanges(before, totals(game));
+  }
 }
 function validNames(names, kind = "whist") {
   return (playerCounts[kind] ?? playerCounts.whist).includes(names?.length) && names.every(name => name.trim()) &&
@@ -1223,7 +1247,11 @@ const actions = {
   "rk-tricks"() { openRikiki("tricks"); },
   "rk-edit"(value) { openRikiki("edit", Number(value)); },
   "rk-bid"(value, seat) { rikiki.bids[Number(seat)] = Number(value); renderRikiki(); },
-  "rk-made"(value, seat) { rikiki.tricks[Number(seat)] = Number(value); renderRikiki(); },
+  "rk-made"(value, seat) {
+    rikiki.tricks[Number(seat)] = Number(value);
+    settleTricks(Number(seat));
+    renderRikiki();
+  },
   "rk-confirm"() { recordRikiki(); },
   "edit-score"(value) { openScore(Number(value)); },
   close() { dialog.close(); },
