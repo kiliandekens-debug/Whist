@@ -36,7 +36,7 @@ function normalize(snapshot) {
   return migratePlayers(state);
 }
 const pagePaths = {
-  home:"/accueil", setup:"/nouvelle-partie", table:"/nouvelle-partie/table", rikiki:"/nouvelle-partie/rikiki", board:"/partie",
+  home:"/accueil", setup:"/nouvelle-partie", table:"/nouvelle-partie/table", rikiki:"/nouvelle-partie/rikiki", board:"/partie", help:"/regles",
   history:"/historique", rules:"/bareme", groups:"/groupes", players:"/joueurs", statistics:"/classements",
 };
 const pagesByPath = new Map(Object.entries(pagePaths).map(([screen,path]) => [path,screen]));
@@ -56,6 +56,7 @@ let historyPlayer = "";
 let groupToRename = null;
 let rikiki = null;
 let fromRules = "home";
+let fromHelp = "home";
 let toastTimer;
 let restoreFocus;
 const suits = ["♠", "♥", "♣", "♦", "★", "●", "▲", "■"];
@@ -190,7 +191,7 @@ function openPath() {
   go(next,true);
 }
 function render() {
-  const screens = {watch:watchView, rikiki:rikikiOptions, home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
+  const screens = {watch:watchView, help:helpPage, rikiki:rikikiOptions, home, setup, table, board, history, archive, rules, groups, players:playersPage, profile:playerProfile, statistics:statisticsPage};
   try {
     app.innerHTML = screens[page]();
   } catch (error) {
@@ -298,7 +299,7 @@ function setup() {
       </div>`).join("")}</div>
       <p class="hint">Déjà venu ? Tape le début de son pseudo. Les nouveaux joueurs sont ajoutés au départ.</p>
       <p class="error" id="setup-error" hidden>Choisis un joueur différent à chaque place, y compris pour les anciens pseudos.</p>
-      <div class="page-actions"><button class="quiet" type="button" data-action="groups">${icon("users")} Groupes de joueurs</button><button class="btn primary" type="submit">${kind === "rikiki" ? "Régler la partie" : "Placer les joueurs"} ${icon("arrow")}</button></div>
+      <div class="page-actions"><span><button class="quiet" type="button" data-action="groups">${icon("users")} Groupes de joueurs</button><a class="quiet" href="/regles" data-action="help">Comment jouer ?</a></span><button class="btn primary" type="submit">${kind === "rikiki" ? "Régler la partie" : "Placer les joueurs"} ${icon("arrow")}</button></div>
     </form></section>`;
 }
 // Rikiki settings, chosen once before the first deal.
@@ -331,7 +332,7 @@ function rikikiOptions() {
         <input type="checkbox" role="switch" id="rikiki-hook" name="hook" ${settings.hook ? "checked" : ""}>
       </div>
       <p class="error" id="rikiki-error" role="alert" hidden>Le minimum de cartes ne peut pas dépasser le maximum.</p>
-      <div class="page-actions"><span></span><button class="btn primary" type="submit">Lancer la partie ${icon("arrow")}</button></div>
+      <div class="page-actions"><a class="quiet" href="/regles" data-action="help">Comment jouer ?</a><button class="btn primary" type="submit">Lancer la partie ${icon("arrow")}</button></div>
     </form></section>`;
 }
 function table() {
@@ -387,7 +388,7 @@ function gameView(game, finished) {
   const eyebrow = finished ? formatDate(game.finished) + (rikikiGame ? ", Rikiki" : "")
     : !rikikiGame ? "Feuille de score, " + game.players.length + " joueurs"
     : complete ? "Rikiki, toutes les donnes sont jouées"
-    : "Rikiki, " + cards + " carte" + plural(cards) + " · donne " + (played + 1) + " sur " + game.plan.length;
+    : "Rikiki, " + cards + " carte" + plural(cards) + " · donne " + (played + 1) + " sur " + game.plan.length + (game.pending?.trump ? " · " + trumpLabel(game.pending.trump) : "");
   const bids = rikikiGame && !finished ? game.pending?.bids : null;
   let controls = "";
   if (finished && !viewer) controls = `<div class="board-actions"><button class="btn secondary" data-action="rematch">Rejouer</button><button class="btn primary" data-action="share-game">${icon("share")} Partager le résultat</button></div>`;
@@ -411,10 +412,37 @@ function gameView(game, finished) {
     ${controls}
   </section>`;
 }
+const trumps = [["♥", "Cœur"], ["♦", "Carreau"], ["♣", "Trèfle"], ["♠", "Pique"], ["none", "Sans atout"]];
+const trumpLabel = trump => trump === "none" ? "sans atout" : "atout " + trump;
+// The rules in a nutshell, with the points this notebook is set to.
+function helpPage() {
+  const rules = {success:10, trick:2, miss:2, ...data.rikikiSettings};
+  return `<section class="wrap narrow page help-page">${back("help-back", "Retour")}${head("Comment jouer", "L’essentiel du Rikiki et du Whist, et comment les noter ici.")}
+    <h2 class="profile-title">Rikiki</h2>
+    <p class="body-copy">À chaque donne, chacun annonce combien de plis il pense faire. Le but est de tomber juste : ni plus, ni moins.</p>
+    <ol class="help-steps">
+      <li><strong>La donne.</strong> Le donneur distribue le nombre de cartes prévu, le même pour tous. Il retourne la carte suivante : sa couleur est l’atout. S’il ne reste pas de carte, la donne se joue sans atout.</li>
+      <li><strong>Les annonces.</strong> Le joueur à gauche du donneur parle en premier, le donneur en dernier. Si la contrainte est activée, le total des annonces ne peut pas être égal au nombre de cartes : quelqu’un sera forcément déçu.</li>
+      <li><strong>Le jeu.</strong> Le premier à avoir parlé entame. On doit fournir la couleur demandée ; sinon on peut couper à l’atout ou se défausser. Le pli va au plus fort atout, à défaut à la plus forte carte de la couleur demandée. Celui qui remporte le pli entame le suivant.</li>
+      <li><strong>Les points.</strong> Annonce réussie : +${rules.success}, plus ${rules.trick} par pli fait. Annonce ratée : −${rules.miss} par pli d’écart, en plus ou en moins.</li>
+      <li><strong>La suite.</strong> Le donneur passe au joueur suivant et le nombre de cartes change selon le déroulement choisi, par exemple de 1 jusqu’au maximum puis retour à 1.</li>
+    </ol>
+    <p class="hint">Dans le carnet : encode les annonces, jouez la donne, puis encode les plis. Les chiffres impossibles sont grisés ou remplis tout seuls.</p>
+    <h2 class="profile-title">Whist</h2>
+    <p class="body-copy">À quatre (ou cinq avec un mort), chaque donne commence par les annonces. Le contrat le plus fort l’emporte ; à hauteur égale, la couleur la plus forte gagne : cœur, carreau, trèfle, pique.</p>
+    <ol class="help-steps">
+      <li><strong>Duo.</strong> Deux joueurs s’associent pour faire au moins le nombre de plis annoncé, de 8 à 13.</li>
+      <li><strong>Solo.</strong> Un joueur s’engage seul sur 6, 7 ou 8 plis.</li>
+      <li><strong>Misères.</strong> Le déclarant ne doit faire aucun pli ; en grande misère il joue cartes sur table selon vos habitudes.</li>
+      <li><strong>Abondance et chelems.</strong> Un joueur seul vise 9 plis ou plus dans la couleur de son choix.</li>
+    </ol>
+    <p class="hint">Les points de chaque contrat se règlent dans <a class="text-action" href="/bareme" data-action="rules">le barème</a>. Les règles varient d’une table à l’autre : mettez-vous d’accord avant de distribuer.</p>
+  </section>`;
+}
 function rikikiTable(game) {
   return `<div class="surface score-table-wrap"><table class="score-table" aria-label="Points par donne"><thead><tr><th scope="col">Donne</th>${game.players.map((name, seat) => `<th scope="col">${avatar(seat)}<span>${escape(name)}</span></th>`).join("")}</tr></thead>
   <tbody>${game.rounds.map((round, index) => {
-    const summary = `Donne ${index + 1}<small>${round.cards} carte${plural(round.cards)}</small>`;
+    const summary = `Donne ${index + 1}<small>${round.cards} carte${plural(round.cards)}${round.trump ? ", " + trumpLabel(round.trump) : ""}</small>`;
     const label = `Modifier la donne ${index + 1}`;
     const first = viewer ? `<div class="score-edit">${summary}</div>`
       : `<button class="score-edit" data-action="rk-edit" data-value="${index}" aria-label="${label}" title="${label}">${icon("pencil")} ${summary}</button>`;
@@ -1036,6 +1064,7 @@ function openRikiki(phase, index = null) {
   if ((index !== null && !round) || cards == null || (phase === "tricks" && !game.pending)) return;
   const blank = game.players.map(() => null);
   rikiki = {game, index, phase, cards, at, values:null, auto:new Set(),
+    trump:round?.trump ?? game.pending?.trump ?? null,
     bids:[...(round?.bids ?? game.pending?.bids ?? blank)], tricks:[...(round?.tricks ?? blank)]};
   renderRikiki();
   dialog.scrollTop = 0;
@@ -1097,7 +1126,8 @@ function renderRikiki() {
   showDialog(`${dialogHead(title)}
     ${scoreStandings(game)}
     <div class="dialog-main score-entry">${roleStrip(game, at)}
-      <p class="rikiki-cards"><strong>${cards} carte${plural(cards)}</strong> par joueur${showBids ? ". Chacun annonce ses plis, dans l’ordre de parole." : ". Combien de plis chacun a-t-il faits ?"}</p>
+      <p class="rikiki-cards"><strong>${cards} carte${plural(cards)}</strong> par joueur${!showBids && rikiki.trump ? ", " + trumpLabel(rikiki.trump) : ""}${showBids ? ". Chacun annonce ses plis, dans l’ordre de parole." : ". Combien de plis chacun a-t-il faits ?"}</p>
+      ${showBids ? `<div class="trump-row"><span id="trump-label">Atout <small>(facultatif)</small></span><div class="toggle" role="group" aria-labelledby="trump-label">${trumps.map(([value, label]) => `<button aria-label="${label}" aria-pressed="${rikiki.trump === value}" class="${["♥", "♦"].includes(value) ? "red-suit" : ""}" data-action="rk-trump" data-value="${value}">${value === "none" ? "Sans" : value}</button>`).join("")}</div></div>` : ""}
       ${order.map(seat => `<div class="rikiki-row"><p class="rikiki-name">${avatar(seat)}<strong>${escape(game.players[seat])}</strong><small>${seat === dealer ? "Donneur" + warning : seat === first ? "Parle en premier" : ""}${phase === "tricks" ? (seat === dealer || seat === first ? ", " : "") + "a annoncé " + bids[seat] : ""}</small></p>
         ${showBids ? (phase === "edit" ? '<small class="rikiki-label">Annonce</small>' : "") + rikikiPicker("bids", seat, bids[seat], cards, null, seat === dealer ? closed : null) : ""}
         ${showTricks ? (phase === "edit" ? '<small class="rikiki-label">Plis faits</small>' : "") + rikikiPicker("tricks", seat, tricks[seat], cards, bids[seat]) : ""}
@@ -1121,7 +1151,7 @@ function recordRikiki() {
   const {game, index, phase, cards, bids, tricks, values} = rikiki;
   const live = page === "board";
   if (phase === "bids") {
-    game.pending = {bids:[...bids]};
+    game.pending = {bids:[...bids], ...(rikiki.trump ? {trump:rikiki.trump} : {})};
     save();
     render();
     tell("Annonces notées. Bonne donne !");
@@ -1132,7 +1162,7 @@ function recordRikiki() {
   }
   if (!values) return;
   const before = totals(game);
-  const round = {cards, bids:[...bids], tricks:[...tricks], values};
+  const round = {cards, bids:[...bids], tricks:[...tricks], values, ...(rikiki.trump ? {trump:rikiki.trump} : {})};
   if (index === null) {
     game.rounds.push(round);
     delete game.pending;
@@ -1301,6 +1331,9 @@ const actions = {
   history() { go("history"); },
   "view-game"(id) { viewedGame = data.history.find(game => game.id === id); go("archive"); },
   rules() { if (page !== "rules") fromRules = page; go("rules"); },
+  help() { if (page !== "help") fromHelp = page; go("help"); },
+  "help-back"() { go(["setup", "rikiki", "table"].includes(fromHelp) && !draft ? "home" : fromHelp === "archive" && !viewedGame ? "history" : fromHelp); },
+  "rk-trump"(value) { rikiki.trump = rikiki.trump === value ? null : value; renderRikiki(); },
   "rules-back"() { go(fromRules); },
   "reset-rules"() { ask("Rétablir le barème ?", "Les nouvelles parties utiliseront le barème par défaut.", "confirm-reset", "Rétablir"); },
   "confirm-reset"() { data.overrides = {}; data.piccolo = false; save(); dialog.close(); render(); tell("Barème rétabli."); },

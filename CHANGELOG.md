@@ -7,6 +7,12 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.12.0 — 2026-11-13
+
+### Ajouté
+- Rikiki : l’atout de la donne peut être noté avec les annonces ; il reste affiché pendant la donne et dans le tableau.
+- Page « Comment jouer » : l’essentiel du Rikiki et du Whist, avec les points réglés dans le carnet.
+
 ## 1.11.0 — 2026-11-13
 
 ### Ajouté
