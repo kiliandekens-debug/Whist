@@ -247,7 +247,7 @@ function setup() {
       <div class="setup-grid">${draft.players.map((name, index) => `<div class="player-input surface">
         ${avatar(index)}
         <label><span>Joueur ${index + 1}</span><input class="player-name" name="player${index}" maxlength="24"
-          placeholder="Prénom ou surnom" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false"
+          placeholder="Pseudo" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false"
           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="player-suggestions-${index}"
           enterkeyhint="${index < count - 1 ? "next" : "go"}" required value="${escape(name)}"></label>
         <div class="player-suggestions" role="listbox" aria-label="Joueurs proposés" id="player-suggestions-${index}" hidden></div>
@@ -797,10 +797,11 @@ function updateSuggestions(input) {
   const index = Number(input.name.slice(6));
   const list = app.querySelector("#player-suggestions-" + index);
   const selected = new Set(draftPlayerIds().filter((_,seat) => seat !== index));
-  const matches = matchingPlayers(data.roster,input.value).filter(player => !selected.has(player.id) && playerKey(player.nickname) !== playerKey(input.value)).slice(0,6);
+  const matches = matchingPlayers(data.roster,input.value).filter(player => !selected.has(player.id) && playerKey(player.nickname) !== playerKey(input.value)).slice(0,4);
   list.innerHTML = matches.map(player => `<button type="button" role="option" aria-selected="false" data-action="select-player" data-value="${escape(player.id)}" data-seat="${index}"><strong>${escape(player.nickname)}</strong>${player.aliases.length ? `<small>${player.aliases.map(escape).join(", ")}</small>` : ""}</button>`).join("");
   list.hidden = !matches.length;
   input.setAttribute("aria-expanded",String(!!matches.length));
+  if (matches.length) keepPlayerInputVisible();
 }
 const ruleValue = (contract, field) => data.overrides[contract.id]?.[field] ?? contract[field];
 function ruleInput(items, fields, sign, label) {
@@ -961,7 +962,7 @@ function openRikiki(phase, index = null) {
     bids:[...(round?.bids ?? game.pending?.bids ?? blank)], tricks:[...(round?.tricks ?? blank)]};
   renderRikiki();
 }
-function rikikiPicker(kind, seat, selected, max, target) {
+function rikikiPicker(kind, seat, selected, max, target, closed = null) {
   const action = kind === "bids" ? "rk-bid" : "rk-made";
   const who = escape(rikiki.game.players[seat]);
   // A long row of numbers stops being readable past a normal hand; step instead.
@@ -969,7 +970,7 @@ function rikikiPicker(kind, seat, selected, max, target) {
     <button aria-label="Un de moins pour ${who}" data-action="${action}" data-step="-1" data-value="${(selected ?? 0) - 1}" data-seat="${seat}" ${selected ? "" : "disabled"}>−</button>
     <output>${selected ?? "–"}</output>
     <button aria-label="Un de plus pour ${who}" data-action="${action}" data-step="1" data-value="${(selected ?? -1) + 1}" data-seat="${seat}" ${selected === max ? "disabled" : ""}>+</button></div>`;
-  return `<div class="tricks">${Array.from({length:max + 1}, (_, n) => `<button aria-label="${n} pli${plural(n)} pour ${who}" aria-pressed="${n === selected}" class="${n === target ? "target" : ""}" data-action="${action}" data-value="${n}" data-seat="${seat}">${n}</button>`).join("")}</div>`;
+  return `<div class="tricks">${Array.from({length:max + 1}, (_, n) => `<button aria-label="${n} pli${plural(n)} pour ${who}${n === closed ? ", interdit au donneur" : ""}" aria-pressed="${n === selected}" class="${n === target ? "target" : ""}${n === closed ? " closed" : ""}" data-action="${action}" data-value="${n}" data-seat="${seat}" ${n === closed ? "disabled" : ""}>${n}</button>`).join("")}</div>`;
 }
 function renderRikiki() {
   const {game, phase, cards, at, bids, tricks} = rikiki;
@@ -986,8 +987,10 @@ function renderRikiki() {
   rikiki.values = showTricks && ready && filled(bids) ? game.players.map((_, seat) => rikikiPoints(bids[seat], tricks[seat], game.rules)) : null;
   // Once the others have spoken, tell the dealer which number is closed to them.
   const others = bids.filter((_, seat) => seat !== dealer);
-  const closed = cards - sum(others);
-  const warning = game.hook && showBids && filled(others) && closed >= 0 ? ", ne peut pas annoncer " + closed : "";
+  const closed = game.hook && showBids && filled(others) && cards - sum(others) >= 0 ? cards - sum(others) : null;
+  // A number chosen before the others spoke may have become the closed one.
+  if (closed !== null && bids[dealer] === closed) bids[dealer] = null;
+  const warning = closed === null ? "" : ", ne peut pas annoncer " + closed;
   const active = dialog.open ? document.activeElement : null;
   const focusData = active?.dataset ? {...active.dataset} : null;
   const scroll = dialog.scrollTop;
@@ -1000,7 +1003,7 @@ function renderRikiki() {
     <div class="dialog-main score-entry">${roleStrip(game, at)}
       <p class="rikiki-cards"><strong>${cards} carte${plural(cards)}</strong> par joueur${showBids ? ". Chacun annonce ses plis, dans l’ordre de parole." : ". Combien de plis chacun a-t-il faits ?"}</p>
       ${order.map(seat => `<div class="rikiki-row"><p class="rikiki-name">${avatar(seat)}<strong>${escape(game.players[seat])}</strong><small>${seat === dealer ? "Donneur" + warning : seat === first ? "Parle en premier" : ""}${phase === "tricks" ? (seat === dealer || seat === first ? ", " : "") + "a annoncé " + bids[seat] : ""}</small></p>
-        ${showBids ? (phase === "edit" ? '<small class="rikiki-label">Annonce</small>' : "") + rikikiPicker("bids", seat, bids[seat], cards, null) : ""}
+        ${showBids ? (phase === "edit" ? '<small class="rikiki-label">Annonce</small>' : "") + rikikiPicker("bids", seat, bids[seat], cards, null, seat === dealer ? closed : null) : ""}
         ${showTricks ? (phase === "edit" ? '<small class="rikiki-label">Plis faits</small>' : "") + rikikiPicker("tricks", seat, tricks[seat], cards, bids[seat]) : ""}
       </div>`).join("")}
     </div>
@@ -1040,6 +1043,8 @@ function recordRikiki() {
   render();
   animateScoreChanges(before, totals(game));
   tell(index === null ? "C’est noté !" : "Voilà, c’est corrigé.");
+  // The next deal starts with its announcements: open them without another tap.
+  if (index === null && page === "board" && game.rounds.length < game.plan.length) openRikiki("bids");
 }
 function validNames(names, kind = "whist") {
   return (playerCounts[kind] ?? playerCounts.whist).includes(names?.length) && names.every(name => name.trim()) &&
@@ -1131,6 +1136,7 @@ function launchGame() {
   save();
   if (dialog.open) dialog.close();
   go("board");
+  if (data.active.type === "rikiki") openRikiki("bids");
 }
 const actions = {
   home() { draft = null; go("home"); },
@@ -1299,17 +1305,12 @@ function keepPlayerInputVisible() {
     const input = document.activeElement;
     if (!compactSetup.matches || !input?.matches(".player-name")) return;
 
-    const viewport = window.visualViewport;
-    const height = viewport?.height ?? window.innerHeight;
-    const offset = viewport?.offsetTop ?? 0;
-    // Reserve room for the preview controls above and below the form.
-    const safeTop = offset + Math.min(110, height * .22);
-    const safeBottom = offset + height - Math.min(145, height * .26);
-    const rect = input.getBoundingClientRect();
-    if (rect.top >= safeTop && rect.bottom <= safeBottom) return;
-
-    const distance = (rect.top + rect.bottom - safeTop - safeBottom) / 2;
-    window.scrollBy(0, distance);
+    // Put the player's card at the top of what the keyboard leaves visible,
+    // so the suggestions under the field are never hidden behind the keys.
+    const offset = window.visualViewport?.offsetTop ?? 0;
+    const top = (input.closest(".player-input") ?? input).getBoundingClientRect().top - offset;
+    if (top >= 6 && top <= 28) return;
+    window.scrollBy(0, top - 10);
   }, 90);
 }
 app.addEventListener("focusin", keepPlayerInputVisible);

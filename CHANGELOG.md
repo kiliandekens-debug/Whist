@@ -7,6 +7,13 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.9.1 — 2026-11-13
+
+### Modifié
+- Rikiki : les annonces s’ouvrent toutes seules au lancement de la partie et après chaque donne.
+- Rikiki : le chiffre interdit au donneur est grisé.
+- Saisie des pseudos : la fiche du joueur remonte en haut de l’écran pour que les suggestions restent visibles au-dessus du clavier.
+
 ## 1.9.0 — 2026-11-13
 
 ### Ajouté
