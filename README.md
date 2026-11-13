@@ -18,12 +18,13 @@ fait directement dans Supabase, sans adresse personnelle dans le dépôt.
 Le proxy Vercel transmet uniquement le jeton Supabase et le contexte de
 déploiement. Les aperçus utilisent un espace de sauvegarde distinct.
 
-La version Sites conserve son authentification et son accès serveur existants.
 
 ## Synchronisation et hors connexion
 
-`sw.js` garde une copie de l’application : le réseau est toujours utilisé quand
-il répond, la copie ne sert que sans connexion. Sur Vercel, le carnet s’ouvre
+`sw.js` garde une copie de l’application et l’affiche tout de suite ; chaque
+ouverture en récupère une nouvelle en arrière-plan et prévient quand elle
+change. `vercel/boot.mjs`, minuscule, ouvre le carnet avant de charger le code
+de connexion. Sur Vercel, le carnet s’ouvre
 alors avec les données de l’appareil, pour le dernier compte qui s’y est
 connecté, et les modifications partent dès le retour du réseau.
 

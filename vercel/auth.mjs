@@ -16,9 +16,13 @@ let rejectedToken = null;
 let recovering = false;
 // A follow link is public and read-only: it never goes through sign-in.
 const watching = /^\/suivre\/([0-9a-f]{64})\/?$/.exec(location.pathname);
-navigation.hidden = true;
 const wait = text => { app.innerHTML = '<p class="wrap app-wait"></p>'; app.firstChild.textContent = text; };
-wait("Connexion au carnet…");
+// The boot script may already have opened the notebook; then this module only joins in.
+const boot = window.whistBoot;
+if (!boot) {
+  navigation.hidden = true;
+  wait("Connexion au carnet…");
+}
 
 function lastUser() {
   try { return localStorage.getItem(marker); } catch { return null; }
@@ -165,10 +169,18 @@ async function sessionLost() {
 // Opens the notebook. Without `initial`, the app starts from the copy kept on this device.
 async function launch(userId, initial) {
   if (loadedUser) return;
-  loadedUser = userId;
   document.body.dataset.storage = "supabase";
   document.body.dataset.storageKey = "carnet-whist-v1:" + userId + (config.preview ? ":preview" : "");
-  window.whistAuth = {getAccessToken, initial, sessionLost};
+  window.whistAuth = {initial};
+  adopt(userId);
+  await import("./app.mjs");
+  if (recovering) choosePassword();
+}
+
+// Connects the account to a notebook that is on screen: real session functions and account buttons.
+function adopt(userId) {
+  loadedUser = userId;
+  Object.assign(window.whistAuth, {getAccessToken, sessionLost});
   navigation.hidden = false;
   const logout = document.createElement("button");
   logout.type = "button";
@@ -195,8 +207,6 @@ async function launch(userId, initial) {
   buttons.append(...(config.preview ? [] : [follow]), password, logout);
   for (const button of buttons.children) button.className = "quiet";
   document.querySelector(".cloud-controls").append(buttons);
-  await import("./app.mjs");
-  if (recovering) choosePassword();
 }
 
 // Lets the owner create, share or switch off the read-only link to the current game.
@@ -352,20 +362,31 @@ client.auth.onAuthStateChange((event, session) => {
   } else if (session) setTimeout(() => {void start(session);}, 0);
 });
 
+// Checks in the background that the server still knows the session of a notebook already on screen.
+function verifySession(userId) {
+  if (!navigator.onLine) return;
+  void client.auth.getSession().then(({data, error}) => {
+    if (location.search) history.replaceState(null, "", location.pathname);
+    if (error?.name === "AuthRetryableFetchError") return;
+    if (!data?.session || data.session.user.id !== userId) void sessionLost();
+  });
+}
+
 const known = lastUser();
-if (watching) await startWatching(watching[1]);
+if (boot) {
+  adopt(boot.user);
+  verifySession(boot.user);
+} else if (watching) await startWatching(watching[1]);
 else if (known) {
   // This account already opened the notebook here: show it at once from the copy kept on the device.
   // The session is checked in the background, and every exchange with the server checks it again.
   await startOffline(known);
-  if (navigator.onLine) void client.auth.getSession().then(({data, error}) => {
-    if (location.search) history.replaceState(null, "", location.pathname);
-    if (error?.name === "AuthRetryableFetchError") return;
-    if (!data?.session || data.session.user.id !== known) void sessionLost();
-  });
+  verifySession(known);
 } else {
   const outcome = await client.auth.getSession();
   if (location.search) history.replaceState(null, "", location.pathname);
   if (outcome.error) showLogin("Ce lien a expiré ou a été ouvert dans un autre navigateur. Demande un nouveau lien.");
   else await start(outcome.data.session);
 }
+
+export {getAccessToken, sessionLost};

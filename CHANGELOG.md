@@ -7,6 +7,23 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.10.0 — 2026-11-13
+
+### Ajouté
+- Sauvegarde : export du carnet dans un fichier et import d’une sauvegarde, depuis le bas de page.
+- « Annuler » pendant quelques secondes après la suppression d’un joueur ou d’une partie, le vidage du répertoire, l’annulation d’une partie ou un import.
+- « Rejouer » en fin de partie : mêmes joueurs, même jeu, mêmes réglages.
+- L’écran reste allumé pendant une partie.
+- Si un écran plante, un message propose de recharger ou d’exporter le carnet au lieu d’une page blanche.
+
+### Modifié
+- Démarrage instantané : l’application s’ouvre sur sa copie locale, se met à jour en arrière-plan et prévient quand une nouvelle version est prête. Le code de connexion se charge après l’affichage.
+- Une couleur et un symbole par joueur, identiques à sa courbe, jusqu’à 8 joueurs.
+- Rikiki : les réglages de la dernière partie sont repris, et une nouvelle partie s’ouvre sur le dernier jeu joué.
+
+### Retiré
+- L’ancienne version « Sites » de l’application, remplacée par Vercel.
+
 ## 1.9.2 — 2026-11-13
 
 ### Modifié

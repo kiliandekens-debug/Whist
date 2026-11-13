@@ -219,11 +219,17 @@ input::placeholder {color:#657168}
   display:inline-grid;place-items:center;flex:none;width:43px;height:43px;border-radius:50%;background:var(--tint);
   color:var(--tone);font:26px/1 var(--serif);border:1px solid #263a2219;
 }
-.tone0 {--tint:#e7ebbf;--tone:#4b5b26}
-.tone1 {--tint:#f1dfd5;--tone:#9a3f35}
-.tone2 {--tint:#e0e8ed;--tone:#365666}
-.tone3 {--tint:#dcebe2;--tone:#2b6149}
-.tone4 {--tint:#eee3f2;--tone:#644575}
+/* One colour per seat, the same as that player's line in the chart. */
+.tone0 {--tone:var(--series-0)}
+.tone1 {--tone:var(--series-1)}
+.tone2 {--tone:var(--series-2)}
+.tone3 {--tone:var(--series-3)}
+.tone4 {--tone:var(--series-4)}
+.tone5 {--tone:var(--series-5)}
+.tone6 {--tone:var(--series-6)}
+.tone7 {--tone:var(--series-7)}
+[class*="tone"] {--tint:color-mix(in srgb,var(--tone) 22%,var(--surface))}
+.avatar {color:color-mix(in srgb,var(--tone) 78%,var(--ink))}
 .page-actions {margin-top:17px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .table-felt {
   display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,auto);
@@ -675,11 +681,8 @@ div.score-edit {min-height:0;padding:4px 0}
 [data-theme="dark"] input {border-color:#4a5c50}
 [data-theme="dark"] input::placeholder {color:#8b968a}
 [data-theme="dark"] .avatar {border-color:#ffffff14}
-[data-theme="dark"] .tone0 {--tint:#3a4420;--tone:#d6e193}
-[data-theme="dark"] .tone1 {--tint:#4d2a24;--tone:#f2ab9c}
-[data-theme="dark"] .tone2 {--tint:#263b47;--tone:#abcde2}
-[data-theme="dark"] .tone3 {--tint:#21402f;--tone:#a1d8b7}
-[data-theme="dark"] .tone4 {--tint:#3d2c48;--tone:#d4b6e3}
+[data-theme="dark"] [class*="tone"] {--tint:color-mix(in srgb,var(--tone) 30%,var(--surface))}
+[data-theme="dark"] .avatar {color:color-mix(in srgb,var(--tone) 55%,var(--ink))}
 [data-theme="dark"] .count-options label:has(:checked) {border-color:#9aad63}
 [data-theme="dark"] .score-tile[data-role="dealer"] {background:#3a3520;border-top-color:#e6a536}
 [data-theme="dark"] .score-tile[data-role="pause"] {background:#18261f}
@@ -764,3 +767,11 @@ a.text-action {text-decoration:none}
 .stepper button {width:52px;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-size:20px;font-weight:700}
 .stepper output {min-width:44px;text-align:center;font:750 22px var(--serif);font-variant-numeric:tabular-nums}
 .tricks button.closed {text-decoration:line-through;background:none;border-style:dashed}
+
+#toast {display:flex;align-items:center;gap:12px}
+#toast:empty {display:none}
+.toast-action {min-height:32px;padding:3px 10px;border:1px solid #ffffff55;border-radius:20px;background:none;color:var(--lime);font-size:13px;font-weight:750}
+.import-file {position:relative;cursor:pointer}
+.import-file input {position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.footer {flex-wrap:wrap}
+.footer .theme-toggle + .theme-toggle {margin-left:-2px}
