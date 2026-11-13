@@ -763,3 +763,4 @@ a.text-action {text-decoration:none}
 .stepper {display:flex;align-items:center;gap:10px}
 .stepper button {width:52px;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-size:20px;font-weight:700}
 .stepper output {min-width:44px;text-align:center;font:750 22px var(--serif);font-variant-numeric:tabular-nums}
+.tricks button.closed {text-decoration:line-through;background:none;border-style:dashed}
