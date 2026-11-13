@@ -7,6 +7,11 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.9.0 — 2026-11-13
+
+### Ajouté
+- Mode Rikiki, de 2 à 8 joueurs : annonces puis plis à chaque donne, nombre de cartes qui monte et redescend, points réglables, contrainte du donneur, classement séparé.
+
 ## 1.8.1 — 2026-11-13
 
 ### Modifié

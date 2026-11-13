@@ -58,6 +58,8 @@ export function migratePlayers(state) {
 export function playerStatistics(state, playerId) {
   const stats = {completedGames:0,roundsPlayed:0,contracts:{}};
   for (const game of [...state.history,...(state.active ? [state.active] : [])]) {
+    // Contract statistics only make sense for whist.
+    if (game.type === "rikiki") continue;
     const seat = game.playerIds.indexOf(playerId);
     if (seat === -1) continue;
     if (game !== state.active) stats.completedGames++;
@@ -80,9 +82,11 @@ export function playerStatistics(state, playerId) {
 }
 
 // Finished games only: games played, first places (ties included) and cumulative points.
-export function overallStatistics(state) {
+export function overallStatistics(state, type = "whist") {
   const stats = new Map();
   for (const game of state.history) {
+    // Points of different games are not comparable, so each game has its own ranking.
+    if ((game.type ?? "whist") !== type) continue;
     const totals = game.players.map((_, seat) => game.rounds.reduce((sum, round) => sum + round.values[seat], 0));
     const best = Math.max(...totals);
     game.playerIds.forEach((id, seat) => {

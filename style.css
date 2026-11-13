@@ -23,6 +23,9 @@
   --series-2: #1baf7a;
   --series-3: #eda100;
   --series-4: #e87ba4;
+  --series-5: #008300;
+  --series-6: #6250d6;
+  --series-7: #e34948;
 }
 /* Dark theme: the same felt-and-paper table, lights down. Set by the script in index.html. */
 :root[data-theme="dark"] {
@@ -43,6 +46,9 @@
   --series-2: #199e70;
   --series-3: #c98500;
   --series-4: #d55181;
+  --series-5: #008300;
+  --series-6: #9085e9;
+  --series-7: #e66767;
 }
 *,*::before,*::after {box-sizing:border-box}
 body {margin:0;padding-inline:env(safe-area-inset-left) env(safe-area-inset-right);background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
@@ -729,3 +735,31 @@ div.score-edit {min-height:0;padding:4px 0}
 a.text-action {text-decoration:none}
 .home-card {align-content:start}
 .app-wait {padding-block:28px;color:var(--muted);font-size:15px}
+
+/* Rikiki: any table from two to eight players. */
+.board-body[data-player-count="2"] .score-tiles {grid-template-columns:repeat(2,minmax(0,1fr))}
+.board-body:is([data-player-count="3"],[data-player-count="6"]) .score-tiles {grid-template-columns:repeat(3,minmax(0,1fr))}
+.board-body:is([data-player-count="6"],[data-player-count="7"],[data-player-count="8"]) .score-table :is(th,td):first-child {width:25%}
+.board-body:is([data-player-count="6"],[data-player-count="7"],[data-player-count="8"]) .score-table {font-size:12px}
+.board-body:is([data-player-count="6"],[data-player-count="7"],[data-player-count="8"]) .score-table thead th span:not(.avatar) {font-size:10px}
+.tile-bid {display:inline-block;margin-top:5px;padding:2px 7px;border-radius:20px;background:var(--lime-light);color:var(--ink);font-size:11px;font-weight:700}
+.score-table td small {font-weight:500;color:var(--muted)}
+.rikiki-points {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rikiki-points label {display:grid;gap:6px;font-size:12px;color:var(--muted);font-weight:650}
+.rikiki-points .rule-input {width:100%}
+#rikiki-form .stats-filters {margin-bottom:15px}
+#rikiki-form .rule-option {margin-top:6px}
+.count-options label span {overflow-wrap:anywhere}
+.rikiki-cards {margin-bottom:10px;font-size:13px;color:var(--muted)}
+.rikiki-cards strong {color:var(--ink)}
+.rikiki-row {padding:9px 0;border-top:1px solid var(--line)}
+.rikiki-name {display:flex;align-items:center;gap:8px;margin-bottom:7px;min-width:0}
+.rikiki-name .avatar {width:26px;height:26px;font-size:16px}
+.rikiki-name strong {overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.rikiki-name small {margin-left:auto;text-align:right}
+.rikiki-label {display:block;margin:7px 0 4px;font-weight:650}
+.rikiki-total {margin-bottom:6px;font-size:13px;color:var(--muted)}
+.rikiki-total strong {color:var(--ink);font-variant-numeric:tabular-nums}
+.stepper {display:flex;align-items:center;gap:10px}
+.stepper button {width:52px;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-size:20px;font-weight:700}
+.stepper output {min-width:44px;text-align:center;font:750 22px var(--serif);font-variant-numeric:tabular-nums}

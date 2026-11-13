@@ -6,7 +6,7 @@ const assetTypes = {
   ".svg":"image/svg+xml",
   ".png":"image/png",
 };
-const pagePath = /^\/(?:accueil|nouvelle-partie(?:\/table)?|partie|historique(?:\/[^/]+)?|joueurs(?:\/[^/]+)?|classements|bareme|groupes)?\/?$/;
+const pagePath = /^\/(?:accueil|nouvelle-partie(?:\/(?:table|rikiki))?|partie|historique(?:\/[^/]+)?|joueurs(?:\/[^/]+)?|classements|bareme|groupes)?\/?$/;
 
 function error(code, status) {
   return Response.json({error:code}, {status, headers:{"Cache-Control":"no-store"}});
