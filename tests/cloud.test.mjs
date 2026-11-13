@@ -26,6 +26,7 @@ function device(state, meta = {}) {
     write(snapshot, saved) { local.state = snapshot; local.meta = saved; },
     report(message, action) { local.reports.push(action ?? "ok"); local.message = message; },
     hasLocal:value => value.history.length > 0,
+    onSessionLost() { local.lost = true; },
     revision:meta.revision ?? null,
     dirty:meta.dirty === true,
   });
@@ -107,4 +108,5 @@ test("an expired session is not reported as being offline", async () => {
   const local = device({history:[], groups:[]});
   await local.store.load();
   assert.match(local.message, /session a expiré/);
+  assert.equal(local.lost, true);
 });

@@ -28,7 +28,7 @@ async function request(options, authorize) {
   return response;
 }
 
-export function createCloudStore({read, write, report, hasLocal, revision, dirty, authorize}) {
+export function createCloudStore({read, write, report, hasLocal, revision, dirty, authorize, onSessionLost}) {
   let onlineRevision = null;
   let busy = false;
   let changes = 0;
@@ -41,7 +41,10 @@ export function createCloudStore({read, write, report, hasLocal, revision, dirty
   }
 
   function explain(error) {
-    if (error?.code === "session") report("Ta session a expiré. Recharge la page pour te reconnecter.", "retry");
+    if (error?.code === "session") {
+      report("Ta session a expiré. Recharge la page pour te reconnecter.", "retry");
+      onSessionLost?.();
+    }
     else if (error?.code === "size") report("Le carnet est trop volumineux pour être sauvegardé en ligne.", "retry");
     else report("Hors connexion. Le carnet est gardé sur cet appareil.", "retry");
   }

@@ -7,6 +7,11 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.8.1 — 2026-11-13
+
+### Modifié
+- Le carnet s’ouvre tout de suite avec les données de l’appareil ; la vérification en ligne se fait en arrière-plan.
+
 ## 1.8.0 — 2026-11-12
 
 ### Ajouté

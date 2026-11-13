@@ -728,3 +728,4 @@ div.score-edit {min-height:0;padding:4px 0}
 .footer {align-items:center}
 a.text-action {text-decoration:none}
 .home-card {align-content:start}
+.app-wait {padding-block:28px;color:var(--muted);font-size:15px}
