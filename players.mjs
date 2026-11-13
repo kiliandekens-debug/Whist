@@ -99,3 +99,28 @@ export function overallStatistics(state, type = "whist") {
   }
   return stats;
 }
+
+// One player's record in finished games, kept apart for each game since their points differ.
+export function playerSummary(state, playerId) {
+  const blank = () => ({games:0, wins:0, points:0, best:null, worst:null, rounds:0, exact:0, recent:[]});
+  const summary = {whist:blank(), rikiki:blank()};
+  for (const game of state.history) {
+    const seat = game.playerIds.indexOf(playerId);
+    if (seat === -1) continue;
+    const record = summary[game.type === "rikiki" ? "rikiki" : "whist"];
+    const totals = game.players.map((_, index) => game.rounds.reduce((sum, round) => sum + round.values[index], 0));
+    const points = totals[seat];
+    const rank = 1 + totals.filter(other => other > points).length;
+    record.games++;
+    record.wins += Number(rank === 1);
+    record.points += points;
+    if (record.best === null || points > record.best) record.best = points;
+    if (record.worst === null || points < record.worst) record.worst = points;
+    if (record.recent.length < 5) record.recent.push({id:game.id, finished:game.finished, points, rank, players:game.players.length});
+    if (game.type === "rikiki") for (const round of game.rounds) {
+      record.rounds++;
+      record.exact += Number(round.bids[seat] === round.tricks[seat]);
+    }
+  }
+  return summary;
+}

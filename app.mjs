@@ -1,6 +1,6 @@
 import {createCloudStore, canonical} from "./cloud.mjs";
 import {modes, contracts, byId, rolesFor, calculateRound, declarationWon, rikikiPlan, rikikiPoints} from "./score.mjs";
-import {playerKey, findPlayer, matchingPlayers, migratePlayers, registerPlayer, renamePlayer, playerStatistics, overallStatistics} from "./players.mjs";
+import {playerKey, findPlayer, matchingPlayers, migratePlayers, registerPlayer, renamePlayer, playerStatistics, overallStatistics, playerSummary} from "./players.mjs";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#dialog");
@@ -51,6 +51,9 @@ let statsContract = "all";
 let statsOrder = "wins";
 let overallOrder = "wins";
 let chart = null;
+let historyType = "all";
+let historyPlayer = "";
+let groupToRename = null;
 let rikiki = null;
 let fromRules = "home";
 let toastTimer;
@@ -277,6 +280,7 @@ function setup() {
   const note = kind === "rikiki" ? "Chacun annonce ses plis avant de jouer la donne."
     : count === 5 ? "Le joueur après le donneur est mort à chaque donne." : "";
   return `<section class="wrap narrow page setup-page">${back("home")}${head("Qui joue ?", "Un prénom ou un pseudo pour chacun.")}
+    ${data.groups.length ? `<div class="group-shortcuts" role="group" aria-label="Tables habituelles">${data.groups.map((group, index) => `<button type="button" class="quiet" data-action="use-group" data-value="${index}">${icon("users")} ${escape(group.name)}</button>`).join("")}</div>` : ""}
     <form id="setup-form">
       <fieldset class="player-count"><legend>Jeu</legend><div class="count-options">
         ${[["whist", "Whist"], ["rikiki", "Rikiki"]].map(([value, label]) => `<label><input type="radio" name="game" value="${value}" ${kind === value ? "checked" : ""}><span>${label}</span></label>`).join("")}
@@ -757,13 +761,33 @@ function roundTable(game) {
   }).join("")}</tbody></table></div>`;
 }
 function history() {
+  const games = data.history.filter(game => (historyType === "all" || (game.type ?? "whist") === historyType) &&
+    (!historyPlayer || game.playerIds.includes(historyPlayer)));
+  const known = data.roster.filter(player => data.history.some(game => game.playerIds.includes(player.id)))
+    .sort((a, b) => a.nickname.localeCompare(b.nickname, "fr-BE"));
+  if (historyPlayer && !known.some(player => player.id === historyPlayer)) historyPlayer = "";
+  const filters = data.history.length > 1 ? `<div class="stats-filters"><label>Jeu<select id="history-type">${[["all", "Tous les jeux"], ["whist", "Whist"], ["rikiki", "Rikiki"]].map(([value, label]) => `<option value="${value}" ${historyType === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    <label>Joueur<select id="history-player"><option value="">Tous les joueurs</option>${known.map(player => `<option value="${escape(player.id)}" ${historyPlayer === player.id ? "selected" : ""}>${escape(player.nickname)}</option>`).join("")}</select></label></div>
+    <p class="hint">${games.length} partie${plural(games.length)} sur ${data.history.length}.</p>` : "";
+  const item = game => {
+    const sums = totals(game);
+    const best = Math.max(...sums);
+    const winners = game.players.filter((_, seat) => sums[seat] === best);
+    return `<article class="list-item surface"><div><strong>${game.players.map(escape).join(", ")}</strong><small>${game.type === "rikiki" ? "Rikiki, " : ""}${formatDate(game.finished)}, ${game.rounds.length} donne${plural(game.rounds.length)}</small><small>${winners.length > 1 ? "Vainqueurs" : "Vainqueur"} : ${winners.map(escape).join(", ")} (${signed(best)})</small></div><a class="btn secondary" href="/historique/${encodeURIComponent(game.id)}" data-action="view-game" data-value="${escape(game.id)}">Voir ${icon("arrow")}</a></article>`;
+  };
   return `<section class="wrap narrow page">${back("home")}${head("Historique", "Retrouve le classement et les donnes de tes parties terminées.")}
-    ${data.history.length ? `<div class="list">${data.history.map(game => `<article class="list-item surface"><div><strong>${game.players.map(escape).join(", ")}</strong><small>${game.type === "rikiki" ? "Rikiki, " : ""}${formatDate(game.finished)}, ${game.rounds.length} donne${plural(game.rounds.length)}</small></div><a class="btn secondary" href="/historique/${encodeURIComponent(game.id)}" data-action="view-game" data-value="${escape(game.id)}">Voir ${icon("arrow")}</a></article>`).join("")}</div>` : empty("♥", "Aucune partie terminée", "Tes parties apparaîtront ici à la fin du jeu.")}
+    ${filters}
+    ${games.length ? `<div class="list">${games.map(item).join("")}</div>`
+      : data.history.length ? empty("♥", "Aucune partie pour ce filtre", "Change de jeu ou de joueur pour voir d’autres parties.")
+      : empty("♥", "Aucune partie terminée", "Tes parties apparaîtront ici à la fin du jeu.")}
   </section>`;
 }
+const groupKind = group => group.type ?? (playerCounts.whist.includes(group.players.length) ? "whist" : "rikiki");
 function groups() {
   return `<section class="wrap narrow page">${draft ? back("setup", "Prénoms") : back("home")}${head("Groupes de joueurs", "Retrouve tes tables habituelles sans ressaisir les noms.")}
-    ${data.groups.length ? `<div class="list">${data.groups.map((group, index) => `<article class="list-item surface"><div><strong>${escape(group.name)}</strong><small>${group.players.map(escape).join(", ")}</small></div><button class="btn secondary" data-action="use-group" data-value="${index}">Choisir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♦", "Aucun groupe enregistré", "Tu peux enregistrer les joueurs que tu viens de saisir ou ceux de ta dernière partie.")}
+    ${data.groups.length ? `<div class="list">${data.groups.map((group, index) => `<article class="list-item surface group-item"><div><strong>${escape(group.name)}</strong><small>${groupKind(group) === "rikiki" ? "Rikiki" : "Whist"}, ${group.players.map(escape).join(", ")}</small>
+      <span class="group-tools"><button class="text-action" data-action="rename-group" data-value="${index}">Renommer</button><button class="text-action roster-delete" data-action="delete-group" data-value="${index}">Supprimer</button></span></div>
+      <button class="btn secondary" data-action="use-group" data-value="${index}">Choisir ${icon("arrow")}</button></article>`).join("")}</div>` : empty("♦", "Aucun groupe enregistré", "Tu peux enregistrer les joueurs que tu viens de saisir ou ceux de ta dernière partie.")}
     <div class="page-actions">${data.last ? `<button class="btn secondary" data-action="last-group">Reprendre les derniers joueurs</button>` : ""}<button class="btn primary" data-action="save-group" ${validNames(draft?.players, draft?.type) || data.last ? "" : "disabled"}>Enregistrer un groupe</button></div>
   </section>`;
 }
@@ -785,12 +809,23 @@ function playerProfile() {
   const player = data.roster.find(item => item.id === viewedPlayerId);
   const stats = playerStatistics(data,player.id);
   const records = Object.entries(stats.contracts);
-  return `<section class="wrap narrow page">${back("players","Joueurs")}${head(escape(player.nickname),"Ses contrats, ses points et son taux de réussite.")}
+  const summary = playerSummary(data, player.id);
+  const metric = (value, label, tone = "") => `<article class="surface"><strong class="${tone}">${value}</strong><span>${label}</span></article>`;
+  const mean = record => signed(Math.round(record.points / record.games * 10) / 10).replace(".", ",");
+  const section = (title, record, last) => record.games ? `<h2 class="profile-title">${title}</h2>
+    <div class="player-metrics four">${metric(record.games, "Partie" + plural(record.games))}${metric(record.wins, "Victoire" + plural(record.wins))}${metric(signed(record.points), "Points cumulés", color(record.points))}${last}</div>
+    <p class="hint">${title === "Rikiki" ? "Moyenne " + mean(record) + " par partie. " : ""}Meilleure partie ${signed(record.best)}, moins bonne ${signed(record.worst)}.</p>
+    <ul class="profile-recent" role="list">${record.recent.map(game => `<li><a class="text-action" href="/historique/${encodeURIComponent(game.id)}" data-action="view-game" data-value="${escape(game.id)}">${formatDate(game.finished)}</a><span>${ordinal(game.rank)} sur ${game.players}</span><strong class="${color(game.points)}">${signed(game.points)}</strong></li>`).join("")}</ul>` : "";
+  const whist = section("Whist", summary.whist, metric(mean(summary.whist), "Moyenne", color(summary.whist.points)));
+  const rikiki = section("Rikiki", summary.rikiki, metric(summary.rikiki.rounds ? Math.round(summary.rikiki.exact / summary.rikiki.rounds * 100) + " %" : "–", "Annonces réussies"));
+  return `<section class="wrap narrow page">${back("players","Joueurs")}${head(escape(player.nickname),"Ses parties, ses points et ses contrats.")}
     <div class="page-actions roster-actions"><button class="btn secondary" data-action="edit-player" data-value="${escape(player.id)}">Modifier le pseudo</button><button class="btn secondary" data-action="statistics">${icon("scores")} Classements</button><button class="quiet roster-delete" data-action="delete-player" data-value="${escape(player.id)}">Supprimer le joueur</button></div>
     ${player.aliases.length ? `<p class="hint">Avant, ${player.aliases.map(escape).join(", ")}</p>` : ""}
-    <div class="player-metrics"><article class="surface"><strong>${stats.completedGames}</strong><span>Parties terminées</span></article><article class="surface"><strong>${stats.roundsPlayed}</strong><span>Donnes jouées</span></article><article class="surface"><strong>${records.reduce((total,[,record]) => total + record.attempts,0)}</strong><span>Contrats annoncés</span></article></div>
-    <p class="hint">Les donnes de la partie en cours sont incluses. Les donnes où le joueur est mort sont exclues.</p>
-    ${records.length ? `<div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Résultats par contrat"><thead><tr><th>Contrat</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th><th>Points</th></tr></thead><tbody>${records.map(([id,record]) => `<tr><th scope="row">${escape(byId[id].label)}<small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td><td class="${color(record.points)}">${signed(record.points)}</td></tr>`).join("")}</tbody></table></div>` : empty("♠","Aucun contrat joué","Ses résultats apparaîtront après sa première annonce.")}
+    ${whist}${rikiki}
+    ${whist || rikiki || records.length ? "" : empty("♠", "Aucune partie terminée", "Ses résultats apparaîtront à la fin de sa première partie.")}
+    ${records.length ? `<h2 class="profile-title">Contrats de whist</h2>
+    <p class="hint">${stats.roundsPlayed} donne${plural(stats.roundsPlayed)} jouée${plural(stats.roundsPlayed)}, partie en cours comprise. Les donnes où le joueur est mort sont exclues.</p>
+    <div class="rule-table-wrap surface"><table class="rule-table stats-table" aria-label="Résultats par contrat"><thead><tr><th>Contrat</th><th>Gagnés</th><th>Perdus</th><th>Réussite</th><th>Points</th></tr></thead><tbody>${records.map(([id,record]) => `<tr><th scope="row">${escape(byId[id].label)}<small>${record.attempts} tentative${plural(record.attempts)}</small></th><td>${record.wins}</td><td>${record.losses}</td><td>${successRate(record)}</td><td class="${color(record.points)}">${signed(record.points)}</td></tr>`).join("")}</tbody></table></div>` : ""}
   </section>`;
 }
 const average = record => signed(Math.round(record.points / record.games * 10) / 10).replace(".", ",");
@@ -1334,11 +1369,32 @@ const actions = {
     input.setAttribute("aria-expanded","false");
     input.focus({preventScroll:true});
   },
-  "use-group"(value) { const group = data.groups[Number(value)]; newDraft(group.players,group.playerIds); },
-  "last-group"() { newDraft(data.last,data.lastPlayerIds); },
-  "save-group"() {
-    showDialog(`${dialogHead("Enregistrer un groupe")}<form id="group-form">
-      <div class="dialog-main"><label>Nom du groupe<input name="group" required maxlength="32" autofocus placeholder="Ex. La table du vendredi"></label><p class="error" hidden>Choisis un nom de groupe différent.</p></div>
+  "use-group"(value) {
+    const group = data.groups[Number(value)];
+    draft = makeDraft(group.players, group.playerIds);
+    draft.type = groupKind(group);
+    swap = null;
+    go("setup");
+  },
+  "last-group"() {
+    draft = makeDraft(data.last, data.lastPlayerIds);
+    draft.type = data.lastType ?? draft.type;
+    swap = null;
+    go("setup");
+  },
+  "delete-group"(value) {
+    const before = data.groups;
+    data.groups = data.groups.filter((_, index) => index !== Number(value));
+    save();
+    render();
+    tell("Groupe supprimé.", undo(() => { data.groups = before; }, "groups"));
+  },
+  "rename-group"(value) { actions["save-group"](Number(value)); },
+  "save-group"(index = null) {
+    groupToRename = typeof index === "number" ? index : null;
+    const current = groupToRename === null ? "" : data.groups[groupToRename].name;
+    showDialog(`${dialogHead(groupToRename === null ? "Enregistrer un groupe" : "Renommer le groupe")}<form id="group-form">
+      <div class="dialog-main"><label>Nom du groupe<input name="group" required maxlength="32" autofocus placeholder="Ex. La table du vendredi" value="${escape(current)}"></label><p class="error" hidden>Choisis un nom de groupe différent.</p></div>
       <div class="dialog-actions"><button class="btn secondary" data-action="close" type="button">Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></form>`);
   },
   "add-score"() { openScore(); },
@@ -1541,6 +1597,14 @@ app.addEventListener("input", event => {
   }
 });
 app.addEventListener("change", event => {
+  if (["history-type", "history-player"].includes(event.target.id)) {
+    const id = event.target.id;
+    if (id === "history-type") historyType = event.target.value;
+    else historyPlayer = event.target.value;
+    render();
+    app.querySelector("#" + id).focus({preventScroll:true});
+    return;
+  }
   if (["stats-contract","stats-order"].includes(event.target.id)) {
     const id = event.target.id;
     if (id === "stats-contract") statsContract = event.target.value;
@@ -1649,13 +1713,23 @@ document.addEventListener("submit", event => {
     case "group-form": {
       event.preventDefault();
       const name = fields.get("group").trim();
-      if (!name || data.groups.some(group => group.name.toLocaleLowerCase("fr-BE") === name.toLocaleLowerCase("fr-BE"))) {
+      if (!name || data.groups.some((group, index) => index !== groupToRename && group.name.toLocaleLowerCase("fr-BE") === name.toLocaleLowerCase("fr-BE"))) {
         form.querySelector(".error").hidden = false;
         return;
       }
+      if (groupToRename !== null) {
+        data.groups[groupToRename].name = name;
+        groupToRename = null;
+        save();
+        dialog.close();
+        render();
+        tell("Groupe renommé.");
+        break;
+      }
+      const fromDraft = validNames(draft?.players, draft?.type);
       const players = (validNames(draft?.players, draft?.type) ? draft.players : data.last).map(player => player.trim());
       const playerIds = players.map(player => registerPlayer(data.roster,player).id);
-      data.groups.push({name, players,playerIds});
+      data.groups.push({name, players, playerIds, type:fromDraft ? draft.type ?? "whist" : data.lastType ?? "whist"});
       save();
       dialog.close();
       render();

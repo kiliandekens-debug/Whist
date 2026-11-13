@@ -7,6 +7,13 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.11.0 — 2026-11-13
+
+### Ajouté
+- Fiche joueur complète : parties, victoires, points, moyenne, meilleure et moins bonne partie, dernières parties, pour le Whist et pour le Rikiki (avec le taux d’annonces réussies).
+- Groupes : renommer, supprimer, groupes de Rikiki, et choix direct d’un groupe sur l’écran « Qui joue ? ».
+- Historique : filtres par jeu et par joueur, et vainqueur affiché pour chaque partie.
+
 ## 1.10.0 — 2026-11-13
 
 ### Ajouté
