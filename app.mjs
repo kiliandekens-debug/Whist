@@ -51,6 +51,7 @@ let statsContract = "all";
 let statsOrder = "wins";
 let overallOrder = "wins";
 let chart = null;
+let chartOpen = null;
 let historyType = "all";
 let historyPlayer = "";
 let groupToRename = null;
@@ -399,16 +400,16 @@ function gameView(game, finished) {
   else controls = `<div class="board-actions"><button class="btn primary" data-action="rk-bids">${icon("plus")} Encoder les annonces</button><button class="btn secondary" data-action="finish" ${played ? "" : "disabled"}>Terminer la partie</button></div>`;
   return `<section class="board-hero"><div class="wrap"><div class="board-nav">
     ${viewer ? '<span class="live-badge"><i aria-hidden="true"></i>Suivi en direct</span>' : finished ? `${back("history", "Historique")}<button class="board-cancel" type="button" data-action="delete-game">Supprimer la partie</button>` : `${back("home")}<button class="board-cancel" type="button" data-action="cancel-game">Annuler la partie</button>`}
-  </div><div class="board-top">
-    <div><span class="eyebrow">${eyebrow}</span><h1>${heading}</h1></div>
-    ${finished ? `<div class="board-leader">${icon("scores")}<span>${leaders.length > 1 ? "En tête ex æquo" : "En tête"}<strong>${leaders.map(escape).join(", ")}</strong></span></div>` : '<div class="board-emblem" aria-hidden="true"><span>♦</span><span>♠</span></div>'}
+  </div><div class="board-top${finished ? " is-finished" : ""}">
+    <h1>${heading}</h1><span class="eyebrow">${eyebrow}</span>
+    ${finished ? `<div class="board-leader">${icon("scores")}<span>${leaders.length > 1 ? "En tête ex æquo" : "En tête"}<strong>${leaders.map(escape).join(", ")}</strong></span></div>` : ""}
   </div></div></section>
   <section class="wrap board-body" data-player-count="${game.players.length}">
     <div class="round-heading score-heading"><h2>Scores cumulés</h2><small>${bids ? "Points et annonces" : "Points"}</small></div>
     <div class="score-tiles">${game.players.map((name, seat) => scoreTile(name, seat, sums[seat], ranks[seat], roles, bids ? "Annonce " + bids[seat] : "")).join("")}</div>
-    ${scoreChart(game)}
     <div class="round-heading"><h2>Donnes</h2><small>${rikikiGame ? played + " sur " + game.plan.length : played + " au total"}</small></div>
     ${played ? (rikikiGame ? rikikiTable(game) : roundTable(game)) : empty("♣", "À vous de jouer !", rikikiGame ? "Encode les annonces, jouez la donne, puis encode les plis." : "Après la première donne, ajoute le score ici.")}
+    ${scoreChart(game, finished)}
     ${controls}
   </section>`;
 }
@@ -447,16 +448,16 @@ function rikikiTable(game) {
     const first = viewer ? `<div class="score-edit">${summary}</div>`
       : `<button class="score-edit" data-action="rk-edit" data-value="${index}" aria-label="${label}" title="${label}">${icon("pencil")} ${summary}</button>`;
     return `<tr><td>${first}</td>${round.values.map((value, seat) => `<td class="${color(value)}">${signed(value)}<small>${round.tricks[seat]}${game.players.length > 5 ? "/" : " sur "}${round.bids[seat]}</small></td>`).join("")}</tr>`;
-  }).join("")}</tbody></table></div>
+  }).reverse().join("")}</tbody></table></div>
   <p class="hint">Sous chaque score, les plis faits sur les plis annoncés.</p>`;
 }
 // Validated together as a categorical palette on the app surface; names are always shown beside them.
 // The picture to share keeps these light values; on screen the theme supplies --series-0 to --series-7.
 const chartColors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
 const seriesColor = seat => "var(--series-" + seat + ")";
-const chartBox = {width:360, height:230, left:36, right:70, top:12, bottom:24};
+const chartBox = {width:360, height:180, left:36, right:70, top:10, bottom:22};
 const shortName = name => name.length > 9 ? name.slice(0, 8) + "…" : name;
-function scoreChart(game) {
+function scoreChart(game, finished = false) {
   chart = null;
   const count = game.rounds.length;
   if (count < 2) return "";
@@ -479,7 +480,8 @@ function scoreChart(game) {
   ends.forEach((end, index) => { if (index) end.at = Math.max(end.at, ends[index - 1].at + 12); });
   const overflow = Math.max(0, ends.at(-1).at - (height - bottom + 6));
   ends.forEach(end => { end.at -= overflow; });
-  return `<div class="round-heading"><h2>Évolution</h2><small>Points cumulés</small></div>
+  // Folded while a game is being played, so the deals stay in view; open on a finished game.
+  return `<details class="chart-fold" ${chartOpen ?? finished ? "open" : ""}><summary><span>Évolution des scores</span><small>Points cumulés</small></summary>
   <figure class="score-chart surface">
     <ul class="chart-legend" role="list">${game.players.map((name, seat) => `<li><span class="chart-key" style="background:${seriesColor(seat)}"></span>${escape(name)}</li>`).join("")}</ul>
     <div class="chart-plot"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Évolution des points cumulés, donne après donne. Le détail figure dans le tableau des donnes.">
@@ -490,7 +492,7 @@ function scoreChart(game) {
       ${series.map((line, seat) => `<circle class="chart-dot" data-seat="${seat}" r="4" style="fill:${seriesColor(seat)}" cx="${x(count)}" cy="${y(line.at(-1))}"/>`).join("")}
       ${ends.map(({seat, at}) => `<text class="chart-name" x="${x(count) + 9}" y="${(at + 3.5).toFixed(1)}">${escape(shortName(game.players[seat]))}</text>`).join("")}
     </svg><div class="chart-tip" hidden></div></div>
-  </figure>`;
+  </figure></details>`;
 }
 function moveChartCursor(index) {
   const figure = app.querySelector(".score-chart");
@@ -521,6 +523,9 @@ function followChart(event) {
   const index = Math.round((position - chartBox.left) / (chart.x(chart.count) - chartBox.left) * chart.count);
   moveChartCursor(Math.min(chart.count, Math.max(0, index)));
 }
+app.addEventListener("toggle", event => {
+  if (event.target.matches?.(".chart-fold")) chartOpen = event.target.open;
+}, true);
 app.addEventListener("pointermove", followChart);
 app.addEventListener("pointerdown", followChart);
 app.addEventListener("pointerleave", event => {
@@ -786,7 +791,7 @@ function roundTable(game) {
     const first = viewer ? `<div class="score-edit">${summary}</div>`
       : `<button class="score-edit" data-action="edit-score" data-value="${index}" aria-label="${editLabel}, ${name}" title="${editLabel}">${icon("pencil")} ${summary}</button>`;
     return `<tr><td>${first}</td>${round.values.map((value, seat) => `<td class="${seat === dead ? "dead-cell" : color(value)}">${signed(value)}${seat === dead ? "<small>Mort</small>" : ""}</td>`).join("")}</tr>`;
-  }).join("")}</tbody></table></div>`;
+  }).reverse().join("")}</tbody></table></div>`;
 }
 function history() {
   const games = data.history.filter(game => (historyType === "all" || (game.type ?? "whist") === historyType) &&

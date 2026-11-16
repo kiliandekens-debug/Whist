@@ -7,6 +7,12 @@ l’application vient de `package.json`.
 - Deuxième chiffre : nouvelle fonctionnalité.
 - Troisième chiffre : correction.
 
+## 1.12.1 — 2026-11-16
+
+### Modifié
+- Feuille de score plus compacte : en-tête réduit, donnes juste sous les scores, de la plus récente à la plus ancienne.
+- Le graphique passe sous les donnes, replié pendant la partie et ouvert sur une partie terminée.
+
 ## 1.12.0 — 2026-11-13
 
 ### Ajouté
